@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="Sentinel PMD Rules"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+                             https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+    <description>PMD rules for the Sentinel Jenkins Plugin</description>
+
+    <!-- Best Practices -->
+    <rule ref="category/java/bestpractices.xml">
+        <!-- Both PMD 6 and PMD 7 names for the same rule -->
+        <exclude name="UnitTestContainsTooManyAsserts"/>
+        <!-- LooseCoupling: EnvVars is required by Jenkins Launcher API -->
+        <exclude name="LooseCoupling"/>
+        <!-- ExhaustiveSwitchHasDefault: default added to satisfy Checkstyle MissingSwitchDefault -->
+        <exclude name="ExhaustiveSwitchHasDefault"/>
+    </rule>
+
+    <!-- Error Prone -->
+    <rule ref="category/java/errorprone.xml">
+        <exclude name="TestClassWithoutTestCases"/>
+        <!-- NullAssignment: killingTest can be explicitly null -->
+        <exclude name="NullAssignment"/>
+        <!-- ConstructorCallsOverridableMethod: GlobalConfiguration.load() is required pattern -->
+        <exclude name="ConstructorCallsOverridableMethod"/>
+    </rule>
+
+    <!-- Code Style -->
+    <rule ref="category/java/codestyle.xml">
+        <!-- AtLeastOneConstructor and UnnecessaryConstructor conflict -->
+        <exclude name="AtLeastOneConstructor"/>
+        <exclude name="UnnecessaryConstructor"/>
+        <!-- CommentDefaultAccessModifier is too strict for test classes -->
+        <exclude name="CommentDefaultAccessModifier"/>
+        <!-- OnlyOneReturn is overly strict -->
+        <exclude name="OnlyOneReturn"/>
+        <!-- LongVariable conflicts with descriptive naming -->
+        <exclude name="LongVariable"/>
+        <!-- ShortVariable conflicts with standard usages -->
+        <exclude name="ShortVariable"/>
+        <!-- ShortClassName is fine for test classes -->
+        <exclude name="ShortClassName"/>
+        <!-- LinguisticNaming: test method names like toStringContainsScore are valid -->
+        <exclude name="LinguisticNaming"/>
+    </rule>
+
+    <!-- Design -->
+    <rule ref="category/java/design.xml">
+        <!-- GodClass/ExcessivePublicCount/TooManyFields: Pipeline Step classes
+             legitimately expose all sentinel CLI options -->
+        <exclude name="GodClass"/>
+        <exclude name="ExcessivePublicCount"/>
+        <exclude name="TooManyFields"/>
+        <exclude name="TooManyMethods"/>
+        <!-- DataClass: Step classes are intentionally data-heavy -->
+        <exclude name="DataClass"/>
+        <!-- LawOfDemeter: listener.getLogger() is standard Jenkins pattern -->
+        <exclude name="LawOfDemeter"/>
+        <!-- SignatureDeclareThrowsException: StepExecution.run() requires throws Exception -->
+        <exclude name="SignatureDeclareThrowsException"/>
+        <!-- UseObjectForClearerAPI: MutationEntry record mirrors XML structure -->
+        <exclude name="UseObjectForClearerAPI"/>
+        <!-- CognitiveComplexity/CyclomaticComplexity: orchestration logic is inherently complex -->
+        <exclude name="CognitiveComplexity"/>
+        <exclude name="CyclomaticComplexity"/>
+        <!-- ClassWithOnlyPrivateConstructorsShouldBeFinal: inner non-final for CPS -->
+        <exclude name="ClassWithOnlyPrivateConstructorsShouldBeFinal"/>
+        <!-- AvoidCatchingGenericException: StepExecution callbacks must catch Exception -->
+        <exclude name="AvoidCatchingGenericException"/>
+        <!-- AvoidThrowingRawExceptionTypes: Jenkins pipeline steps use RuntimeException -->
+        <exclude name="AvoidThrowingRawExceptionTypes"/>
+    </rule>
+
+</ruleset>

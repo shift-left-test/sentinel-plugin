@@ -1,0 +1,226 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:l="/lib/layout" xmlns:st="jelly:stapler">
+  <l:layout title="Sentinel Report">
+    <l:main-panel>
+      <script src="${rootURL}/plugin/echarts-api/js/echarts.min.js"
+              type="text/javascript"></script>
+      <j:set var="result" value="${it.result}" />
+      <j:set var="score" value="${result.overallScore()}" />
+
+      <!-- Header -->
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin-bottom:24px;">
+        <div style="display:flex;align-items:center;gap:24px;margin-bottom:8px;">
+          <div style="font-size:48px;font-weight:700;color:${it.scoreColor};">
+            ${it.formattedScore}%
+          </div>
+          <div style="font-size:14px;color:#333;line-height:1.8;">
+            <span style="color:#1ea64b;font-weight:600;">${score.killed()}</span> killed&#160;/&#160;<span style="color:#e6001f;font-weight:600;">${score.survived()}</span> survived&#160;/&#160;<span style="color:#9ba7af;font-weight:600;">${score.skipped()}</span> skipped
+            <br/>
+            <span style="color:#6b7280;">${it.entryCount} mutations across ${it.fileCount} files</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab bar -->
+      <div id="sentinel-tabs" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;border-bottom:2px solid #e5e7eb;margin-bottom:20px;display:flex;gap:0;">
+        <button onclick="sentinelShowTab('overview')" id="sentinel-tab-overview"
+                style="padding:10px 20px;border:none;border-bottom:2px solid #1ea64b;margin-bottom:-2px;background:transparent;font-size:14px;font-weight:600;color:#333;cursor:pointer;">
+          Overview
+        </button>
+        <button onclick="sentinelShowTab('files')" id="sentinel-tab-files"
+                style="padding:10px 20px;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:transparent;font-size:14px;font-weight:500;color:#6b7280;cursor:pointer;">
+          Files
+        </button>
+        <button onclick="sentinelShowTab('mutations')" id="sentinel-tab-mutations"
+                style="padding:10px 20px;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:transparent;font-size:14px;font-weight:500;color:#6b7280;cursor:pointer;">
+          Mutations
+        </button>
+      </div>
+
+      <!-- Overview tab -->
+      <div id="sentinel-panel-overview" style="display:block;">
+        <h3 style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#333;margin-bottom:16px;">Mutator Distribution</h3>
+        <div id="sentinel-donut-chart"
+             data-dist="${it.mutatorDistributionJson}"
+             style="width:100%;height:400px;">
+        </div>
+      </div>
+
+      <!-- Files tab -->
+      <div id="sentinel-panel-files" style="display:none;">
+        <table class="pane sortable bigtable" style="width:100%;">
+          <tr>
+            <th>File</th>
+            <th style="width:200px;">Score</th>
+            <th style="width:80px;text-align:right;">Killed</th>
+            <th style="width:80px;text-align:right;">Survived</th>
+            <th style="width:80px;text-align:right;">Skipped</th>
+          </tr>
+          <j:forEach var="file" items="${result.fileResults()}">
+            <tr>
+              <td style="font-family:monospace;font-size:12px;">${file.filePath()}</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="flex:1;height:8px;border-radius:4px;background:#e5e7eb;overflow:hidden;">
+                    <j:choose>
+                      <j:when test="${file.score().score() >= 80.0}">
+                        <div style="width:${String.format('%.0f', file.score().score())}%;height:100%;background:#1ea64b;border-radius:4px;">&#160;</div>
+                      </j:when>
+                      <j:when test="${file.score().score() >= 50.0}">
+                        <div style="width:${String.format('%.0f', file.score().score())}%;height:100%;background:#9ba7af;border-radius:4px;">&#160;</div>
+                      </j:when>
+                      <j:otherwise>
+                        <div style="width:${String.format('%.0f', file.score().score())}%;height:100%;background:#e6001f;border-radius:4px;">&#160;</div>
+                      </j:otherwise>
+                    </j:choose>
+                  </div>
+                  <j:choose>
+                    <j:when test="${file.score().score() >= 80.0}">
+                      <span style="font-size:12px;font-weight:600;color:#1ea64b;min-width:48px;text-align:right;">${String.format("%.1f", file.score().score())}%</span>
+                    </j:when>
+                    <j:when test="${file.score().score() >= 50.0}">
+                      <span style="font-size:12px;font-weight:600;color:#9ba7af;min-width:48px;text-align:right;">${String.format("%.1f", file.score().score())}%</span>
+                    </j:when>
+                    <j:otherwise>
+                      <span style="font-size:12px;font-weight:600;color:#e6001f;min-width:48px;text-align:right;">${String.format("%.1f", file.score().score())}%</span>
+                    </j:otherwise>
+                  </j:choose>
+                </div>
+              </td>
+              <td style="text-align:right;">${file.score().killed()}</td>
+              <td style="text-align:right;">${file.score().survived()}</td>
+              <td style="text-align:right;">${file.score().skipped()}</td>
+            </tr>
+          </j:forEach>
+        </table>
+      </div>
+
+      <!-- Mutations tab -->
+      <div id="sentinel-panel-mutations" style="display:none;">
+        <!-- Filters -->
+        <div style="display:flex;gap:12px;margin-bottom:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+          <select id="sentinel-filter-status" onchange="sentinelFilterMutations()"
+                  style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:4px;font-size:13px;color:#333;background:#fff;">
+            <option value="all">All Statuses</option>
+            <option value="KILLED">Killed</option>
+            <option value="SURVIVED">Survived</option>
+            <option value="SKIPPED">Skipped</option>
+          </select>
+          <select id="sentinel-filter-file" onchange="sentinelFilterMutations()"
+                  style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:4px;font-size:13px;color:#333;background:#fff;">
+            <option value="all">All Files</option>
+            <j:forEach var="file" items="${result.fileResults()}">
+              <option value="${file.filePath()}">${file.filePath()}</option>
+            </j:forEach>
+          </select>
+        </div>
+
+        <table class="pane sortable bigtable" style="width:100%;">
+          <tr>
+            <th>File</th>
+            <th style="width:60px;text-align:right;">Line</th>
+            <th>Class</th>
+            <th>Method</th>
+            <th>Mutator</th>
+            <th style="width:90px;text-align:center;">Status</th>
+            <th>Killing Test</th>
+          </tr>
+          <j:forEach var="entry" items="${result.entries()}">
+            <j:choose>
+              <j:when test="${entry.detected()}">
+                <j:set var="entryStatus" value="KILLED" />
+              </j:when>
+              <j:when test="${entry.killingTest() == null}">
+                <j:set var="entryStatus" value="SKIPPED" />
+              </j:when>
+              <j:otherwise>
+                <j:set var="entryStatus" value="SURVIVED" />
+              </j:otherwise>
+            </j:choose>
+            <tr class="sentinel-mutation-row" data-status="${entryStatus}" data-file="${entry.sourceFilePath()}">
+              <td style="font-family:monospace;font-size:12px;">${entry.sourceFilePath()}</td>
+              <td style="text-align:right;">${entry.lineNumber()}</td>
+              <td style="font-family:monospace;font-size:12px;">${entry.mutatedClass()}</td>
+              <td style="font-family:monospace;font-size:12px;">${entry.mutatedMethod()}</td>
+              <td style="font-size:12px;">${entry.mutator()}</td>
+              <td style="text-align:center;">
+                <j:choose>
+                  <j:when test="${entryStatus == 'KILLED'}">
+                    <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#dcfce7;color:#166534;">KILLED</span>
+                  </j:when>
+                  <j:when test="${entryStatus == 'SURVIVED'}">
+                    <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#fee2e2;color:#991b1b;">SURVIVED</span>
+                  </j:when>
+                  <j:otherwise>
+                    <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#f3f4f6;color:#6b7280;">SKIPPED</span>
+                  </j:otherwise>
+                </j:choose>
+              </td>
+              <td style="font-family:monospace;font-size:12px;">${entry.killingTest()}</td>
+            </tr>
+          </j:forEach>
+        </table>
+      </div>
+
+      <!-- JavaScript -->
+      <script type="text/javascript">
+        function sentinelShowTab(name) {
+          var tabs = ['overview', 'files', 'mutations'];
+          for (var i = 0; i &lt; tabs.length; i++) {
+            var t = tabs[i];
+            var panel = document.getElementById('sentinel-panel-' + t);
+            var btn = document.getElementById('sentinel-tab-' + t);
+            if (t === name) {
+              panel.style.display = 'block';
+              btn.style.borderBottomColor = '#1ea64b';
+              btn.style.color = '#333';
+              btn.style.fontWeight = '600';
+            } else {
+              panel.style.display = 'none';
+              btn.style.borderBottomColor = 'transparent';
+              btn.style.color = '#6b7280';
+              btn.style.fontWeight = '500';
+            }
+          }
+        }
+
+        function sentinelFilterMutations() {
+          var statusVal = document.getElementById('sentinel-filter-status').value;
+          var fileVal = document.getElementById('sentinel-filter-file').value;
+          var rows = document.getElementsByClassName('sentinel-mutation-row');
+          for (var i = 0; i &lt; rows.length; i++) {
+            var row = rows[i];
+            var rowStatus = row.getAttribute('data-status');
+            var rowFile = row.getAttribute('data-file');
+            var showStatus = (statusVal === 'all' || rowStatus === statusVal);
+            var showFile = (fileVal === 'all' || rowFile === fileVal);
+            row.style.display = (showStatus &amp;&amp; showFile) ? '' : 'none';
+          }
+        }
+
+        (function() {
+          var chartEl = document.getElementById('sentinel-donut-chart');
+          if (chartEl) {
+            var distData = JSON.parse(chartEl.getAttribute('data-dist'));
+            var chart = echarts.init(chartEl);
+            chart.setOption({
+              tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+              legend: { orient: 'vertical', right: 10, top: 'center' },
+              series: [{
+                type: 'pie',
+                radius: ['40%', '70%'],
+                avoidLabelOverlap: false,
+                itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+                label: { show: false },
+                emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
+                data: distData
+              }]
+            });
+            window.addEventListener('resize', function() { chart.resize(); });
+          }
+        })();
+      </script>
+
+    </l:main-panel>
+  </l:layout>
+</j:jelly>

@@ -1,0 +1,11 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core"
+         xmlns:f="/lib/form">
+    <f:section title="Sentinel">
+        <f:entry title="Program Path"
+                 field="sentinelPath"
+                 description="Default: sentinel (from PATH)">
+            <f:textbox default="sentinel"/>
+        </f:entry>
+    </f:section>
+</j:jelly>

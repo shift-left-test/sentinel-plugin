@@ -1,0 +1,42 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core"
+         xmlns:f="/lib/form">
+
+    <!-- Required -->
+    <f:entry title="Partitions" field="partitions"
+             description="Workspace paths to merge (e.g., .sentinel-1, .sentinel-2)">
+        <f:textbox/>
+    </f:entry>
+
+    <!-- Report -->
+    <f:entry title="Output Dir" field="outputDir"
+             description="Where to write HTML reports">
+        <f:textbox/>
+    </f:entry>
+
+    <f:advanced>
+        <f:entry title="Workspace" field="workspace"
+                 description="Where to write merged results (default: .sentinel-merged)">
+            <f:textbox/>
+        </f:entry>
+        <f:entry title="Source Dir" field="sourceDir"
+                 description="Project source root for report links (default: .)">
+            <f:textbox/>
+        </f:entry>
+
+        <!-- Quality gate -->
+        <f:entry title="Threshold (%)" field="threshold"
+                 description="Minimum mutation score to pass">
+            <f:textbox/>
+        </f:entry>
+        <f:entry title="Threshold Action" field="thresholdAction"
+                 description="Build result when score is below threshold">
+            <f:select/>
+        </f:entry>
+
+        <f:entry title="Program Path" field="sentinelPath"
+                 description="Override global setting">
+            <f:textbox/>
+        </f:entry>
+    </f:advanced>
+</j:jelly>

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mutations>
+    <mutation detected="true">
+        <sourceFile>foo.cpp</sourceFile>
+        <sourceFilePath>src/foo.cpp</sourceFilePath>
+        <mutatedClass>FooClass</mutatedClass>
+        <mutatedMethod>add</mutatedMethod>
+        <lineNumber>42</lineNumber>
+        <mutator>AOR</mutator>
+        <killingTest>FooTest.testAdd</killingTest>
+    </mutation>
+    <mutation detected="true">
+        <sourceFile>foo.cpp</sourceFile>
+        <sourceFilePath>src/foo.cpp</sourceFilePath>
+        <mutatedClass>FooClass</mutatedClass>
+        <mutatedMethod>subtract</mutatedMethod>
+        <lineNumber>50</lineNumber>
+        <mutator>AOR</mutator>
+        <killingTest>FooTest.testSubtract</killingTest>
+    </mutation>
+    <mutation detected="false">
+        <sourceFile>foo.cpp</sourceFile>
+        <sourceFilePath>src/foo.cpp</sourceFilePath>
+        <mutatedClass>FooClass</mutatedClass>
+        <mutatedMethod>multiply</mutatedMethod>
+        <lineNumber>58</lineNumber>
+        <mutator>ROR</mutator>
+        <killingTest></killingTest>
+    </mutation>
+    <mutation detected="true">
+        <sourceFile>bar.cpp</sourceFile>
+        <sourceFilePath>src/bar.cpp</sourceFilePath>
+        <mutatedClass>BarClass</mutatedClass>
+        <mutatedMethod>process</mutatedMethod>
+        <lineNumber>10</lineNumber>
+        <mutator>LCR</mutator>
+        <killingTest>BarTest.testProcess</killingTest>
+    </mutation>
+    <mutation detected="skip">
+        <sourceFile>bar.cpp</sourceFile>
+        <sourceFilePath>src/bar.cpp</sourceFilePath>
+        <mutatedClass>BarClass</mutatedClass>
+        <mutatedMethod>init</mutatedMethod>
+        <lineNumber>5</lineNumber>
+        <mutator>SDL</mutator>
+        <killingTest></killingTest>
+    </mutation>
+</mutations>

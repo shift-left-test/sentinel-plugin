@@ -1,0 +1,5 @@
+<?jelly escape-by-default='true'?>
+<div>
+    Parallelizes sentinel mutation testing across multiple Jenkins nodes
+    using partition and merge-partition.
+</div>
