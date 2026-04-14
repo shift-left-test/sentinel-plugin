@@ -194,7 +194,7 @@ public class SentinelPipelineStep extends SentinelStepBase {
         public ListBoxModel doFillThresholdActionItems() {
             final ListBoxModel items = new ListBoxModel();
             items.add("", "");
-            for (ThresholdAction action : ThresholdAction.values()) {
+            for (final ThresholdAction action : ThresholdAction.values()) {
                 items.add(action.name(), action.name());
             }
             return items;

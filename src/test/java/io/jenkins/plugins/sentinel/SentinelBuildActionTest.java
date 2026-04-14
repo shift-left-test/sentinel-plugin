@@ -20,6 +20,8 @@ class SentinelBuildActionTest {
     private static final int LINE_10 = 10;
     private static final int LINE_20 = 20;
     private static final int LINE_30 = 30;
+    private static final String MUTATOR_AOR = "AOR";
+    private static final String MUTATOR_ROR = "ROR";
 
     @Test
     void formattedScoreReturnsOneDecimalPlace() {
@@ -117,12 +119,12 @@ class SentinelBuildActionTest {
     @Test
     void mutatorDistributionCountsByMutator() {
         final SentinelBuildAction action = createActionWithEntries(List.of(
-                entry("AOR", LINE_10),
-                entry("AOR", LINE_20),
-                entry("ROR", LINE_30)));
+                entry(MUTATOR_AOR, LINE_10),
+                entry(MUTATOR_AOR, LINE_20),
+                entry(MUTATOR_ROR, LINE_30)));
         final Map<String, Integer> dist = action.getMutatorDistribution();
-        assertThat(dist).containsEntry("AOR", 2);
-        assertThat(dist).containsEntry("ROR", 1);
+        assertThat(dist).containsEntry(MUTATOR_AOR, 2);
+        assertThat(dist).containsEntry(MUTATOR_ROR, 1);
     }
 
     @Test
@@ -134,14 +136,14 @@ class SentinelBuildActionTest {
     @Test
     void mutatorDistributionJsonFormatsCorrectly() {
         final SentinelBuildAction action = createActionWithEntries(List.of(
-                entry("AOR", LINE_10),
-                entry("AOR", LINE_20),
-                entry("ROR", LINE_30)));
+                entry(MUTATOR_AOR, LINE_10),
+                entry(MUTATOR_AOR, LINE_20),
+                entry(MUTATOR_ROR, LINE_30)));
         final String json = action.getMutatorDistributionJson();
         assertThat(json).contains("\"name\"");
         assertThat(json).contains("\"value\"");
-        assertThat(json).contains("AOR");
-        assertThat(json).contains("ROR");
+        assertThat(json).contains(MUTATOR_AOR);
+        assertThat(json).contains(MUTATOR_ROR);
     }
 
     @Test
@@ -158,8 +160,8 @@ class SentinelBuildActionTest {
     @Test
     void entryCountReturnsNumberOfEntries() {
         final SentinelBuildAction action = createActionWithEntries(List.of(
-                entry("AOR", LINE_10),
-                entry("ROR", LINE_20)));
+                entry(MUTATOR_AOR, LINE_10),
+                entry(MUTATOR_ROR, LINE_20)));
         assertThat(action.getEntryCount()).isEqualTo(2);
     }
 

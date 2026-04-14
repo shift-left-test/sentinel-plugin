@@ -145,3 +145,4 @@ io.jenkins.plugins.sentinel
 - All sentinel CLI options must be configurable via plugin parameters (see design spec Section 4).
 - Never pass `--threshold` to sentinel — plugin handles threshold judgment from mutations.xml.
 - Merge node = pipeline's current agent. Partition nodes = allocated via `nodeLabel`.
+- After implementing or modifying code, always run the `simplify` skill to review, then run static analysis (`mvn clean verify -Pstatic-analysis`) and fix all issues before considering the task complete.

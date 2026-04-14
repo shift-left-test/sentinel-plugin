@@ -14,6 +14,7 @@ import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("unchecked")
 class SentinelProjectActionTest {
 
     private static final int KILLED_12 = 12;
@@ -26,7 +27,6 @@ class SentinelProjectActionTest {
     private static final int BUILD_2 = 2;
 
     @Test
-    @SuppressWarnings("unchecked")
     void trendDataCollectsFromRecentBuilds() {
         final Job<?, ?> job = mock(Job.class);
         final Run<?, ?> build2 = mockBuild(BUILD_2,
@@ -43,7 +43,6 @@ class SentinelProjectActionTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void trendDataReturnsChronologicalOrder() {
         final Job<?, ?> job = mock(Job.class);
         final Run<?, ?> build2 = mockBuild(BUILD_2,
@@ -63,7 +62,6 @@ class SentinelProjectActionTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void trendDataEmptyWhenNoBuilds() {
         final Job<?, ?> job = mock(Job.class);
         when(job.getLastBuild()).thenReturn(null);
@@ -73,7 +71,6 @@ class SentinelProjectActionTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void trendDataSkipsBuildWithoutAction() {
         final Job<?, ?> job = mock(Job.class);
         final Run<?, ?> buildWithout = mock(Run.class);
@@ -111,7 +108,6 @@ class SentinelProjectActionTest {
         assertThat(action.getJob()).isSameAs(job);
     }
 
-    @SuppressWarnings("unchecked")
     private Run<?, ?> mockBuild(final int number,
                                 final int killed,
                                 final int survived,

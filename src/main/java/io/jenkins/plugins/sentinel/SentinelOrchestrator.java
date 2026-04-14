@@ -54,6 +54,7 @@ public class SentinelOrchestrator extends StepExecution {
     }
 
     @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
     public boolean start() throws Exception {
         SentinelConfigValidator.validate(config);
 
