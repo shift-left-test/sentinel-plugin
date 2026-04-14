@@ -90,6 +90,51 @@ public class SentinelRunStep extends SentinelStepBase {
         return c;
     }
 
+    /**
+     * Converts this step's fields into a SentinelConfiguration,
+     * auto-detecting partition, workspace, and seed from environment
+     * variables when not explicitly set.
+     *
+     * <p>Environment variables checked:</p>
+     * <ul>
+     *   <li>SENTINEL_PARTITION_INDEX + SENTINEL_PARTITION_TOTAL
+     *       -> partition ("index/total"), workspace (".sentinel-{index}")</li>
+     *   <li>SENTINEL_SEED -> seed</li>
+     * </ul>
+     *
+     * @param env environment variables
+     * @return populated SentinelConfiguration
+     */
+    public SentinelConfiguration toConfiguration(
+            final Map<String, String> env) {
+        final SentinelConfiguration c = new SentinelConfiguration();
+        populateConfiguration(c);
+        c.setPartition(partition);
+
+        final String envIndex = env.get(
+                SentinelPostProcessor.ENV_PARTITION_INDEX);
+        final String envTotal = env.get(
+                SentinelPostProcessor.ENV_PARTITION_TOTAL);
+        if (c.getPartition() == null
+                && envIndex != null && envTotal != null) {
+            c.setPartition(envIndex + "/" + envTotal);
+        }
+        if (c.getWorkspace() == null
+                && envIndex != null) {
+            c.setWorkspace(
+                    SentinelPostProcessor.PARTITION_PREFIX
+                            + envIndex);
+        }
+
+        final String envSeed = env.get(
+                SentinelPostProcessor.ENV_SEED);
+        if (c.getSeed() == null && envSeed != null) {
+            c.setSeed(Long.parseLong(envSeed));
+        }
+
+        return c;
+    }
+
     @Override
     public StepExecution start(final StepContext context) {
         return new SentinelRunExecution(context, this);
@@ -118,7 +163,7 @@ public class SentinelRunStep extends SentinelStepBase {
                     getContext().get(EnvVars.class);
 
             final SentinelConfiguration config =
-                    step.toConfiguration();
+                    step.toConfiguration(env);
             final String sentinelCmd = SentinelGlobalConfiguration
                     .getEffectivePath(config.getSentinelPath());
 

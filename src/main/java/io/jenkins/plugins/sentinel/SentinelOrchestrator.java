@@ -5,22 +5,22 @@
 
 package io.jenkins.plugins.sentinel;
 
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import hudson.EnvVars;
 import hudson.FilePath;
 import hudson.Launcher;
-import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import io.jenkins.plugins.sentinel.config.SentinelConfigValidator;
 import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
-import io.jenkins.plugins.sentinel.model.SentinelResult;
 import org.jenkinsci.plugins.workflow.cps.CpsStepContext;
 import org.jenkinsci.plugins.workflow.steps.BodyExecutionCallback;
+import org.jenkinsci.plugins.workflow.steps.EnvironmentExpander;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
 
@@ -45,6 +45,10 @@ public class SentinelOrchestrator extends StepExecution {
     private static final int SINGLE_PARTITION = 1;
 
     private final SentinelConfiguration config;
+    private final AtomicInteger completedCount =
+            new AtomicInteger(0);
+    private final AtomicReference<Throwable> firstFailure =
+            new AtomicReference<>();
 
     /**
      * Creates a new SentinelOrchestrator.
@@ -79,25 +83,33 @@ public class SentinelOrchestrator extends StepExecution {
         listener.getLogger().println(
                 "[Sentinel] Seed: " + config.getSeed());
 
-        if (config.getPartitions() == SINGLE_PARTITION) {
-            final Map<String, String> envOverrides = new EnvVars();
-            envOverrides.put("SENTINEL_PARTITION_INDEX", "1");
-            envOverrides.put("SENTINEL_PARTITION_TOTAL", "1");
-            envOverrides.put("SENTINEL_SEED",
-                    String.valueOf(config.getSeed()));
+        final CpsStepContext cpsContext =
+                (CpsStepContext) getContext();
+        final EnvironmentExpander parentExpander =
+                getContext().get(EnvironmentExpander.class);
+        final int total = config.getPartitions();
 
-            final CpsStepContext cpsContext =
-                    (CpsStepContext) getContext();
+        if (total == SINGLE_PARTITION) {
+            final EnvironmentExpander partEnv =
+                    EnvironmentExpander.merge(
+                            parentExpander,
+                            partitionEnv(1, total));
             cpsContext.newBodyInvoker()
-                    .withContext(envOverrides)
+                    .withContext(partEnv)
                     .withCallback(new AfterPartitionCallback())
                     .start();
         } else {
-            getContext().onFailure(new UnsupportedOperationException(
-                    "Multi-partition execution is not yet "
-                            + "implemented. Use partitions=1 or "
-                            + "manual mode with sentinelRun "
-                            + "+ sentinelMerge."));
+            for (int i = 1; i <= total; i++) {
+                final EnvironmentExpander partEnv =
+                        EnvironmentExpander.merge(
+                                parentExpander,
+                                partitionEnv(i, total));
+                cpsContext.newBodyInvoker()
+                        .withContext(partEnv)
+                        .withCallback(
+                                new MultiPartitionCallback(total))
+                        .start();
+            }
         }
 
         return false;
@@ -131,7 +143,73 @@ public class SentinelOrchestrator extends StepExecution {
         }
     }
 
+    private EnvironmentExpander partitionEnv(
+            final int index, final int total) {
+        return EnvironmentExpander.constant(Map.of(
+                SentinelPostProcessor.ENV_PARTITION_INDEX,
+                String.valueOf(index),
+                SentinelPostProcessor.ENV_PARTITION_TOTAL,
+                String.valueOf(total),
+                SentinelPostProcessor.ENV_SEED,
+                String.valueOf(config.getSeed())));
+    }
+
     private void handlePostPartition() throws Exception {
+        postProcess(false);
+    }
+
+    private class MultiPartitionCallback
+            extends BodyExecutionCallback {
+
+        private static final long serialVersionUID = 1L;
+
+        private final int total;
+
+        MultiPartitionCallback(final int total) {
+            super();
+            this.total = total;
+        }
+
+        @Override
+        public void onSuccess(
+                final StepContext context,
+                final Object result) {
+            if (completedCount.incrementAndGet() == total) {
+                onAllComplete();
+            }
+        }
+
+        @Override
+        public void onFailure(final StepContext context,
+                              final Throwable t) {
+            firstFailure.compareAndSet(null, t);
+            if (completedCount.incrementAndGet() == total) {
+                onAllComplete();
+            }
+        }
+
+        private void onAllComplete() {
+            final Throwable failure = firstFailure.get();
+            if (failure != null) {
+                getContext().onFailure(failure);
+                return;
+            }
+            try {
+                handleMultiPartitionPostProcessing();
+                getContext().onSuccess(null);
+            } catch (Exception e) {
+                getContext().onFailure(e);
+            }
+        }
+    }
+
+    private void handleMultiPartitionPostProcessing()
+            throws Exception {
+        postProcess(true);
+    }
+
+    private void postProcess(final boolean mergePartitions)
+            throws Exception {
         if (config.getOutputDir() == null) {
             return;
         }
@@ -147,65 +225,32 @@ public class SentinelOrchestrator extends StepExecution {
         final String sentinelCmd = SentinelGlobalConfiguration
                 .getEffectivePath(config.getSentinelPath());
         final String srcDir = config.getSourceDir() != null
-                ? config.getSourceDir() : ".";
-        final String wsPath = config.getWorkspace() != null
-                ? config.getWorkspace() : ".sentinel";
+                ? config.getSourceDir()
+                : SentinelPostProcessor.DEFAULT_SOURCE_DIR;
 
-        final List<String> reportArgs =
-                SentinelCommandBuilder.buildReportArgs(
-                        wsPath, srcDir, config.getOutputDir());
-        reportArgs.add(0, sentinelCmd);
-        SentinelRunner.run(reportArgs, env, ws, launcher, listener);
+        final String reportWs;
+        if (mergePartitions) {
+            final List<String> partitionPaths =
+                    SentinelPostProcessor.partitionPaths(
+                            config.getPartitions());
+            listener.getLogger().println(
+                    "[Sentinel] All partitions complete. "
+                            + "Merging results...");
+            SentinelPostProcessor.merge(
+                    sentinelCmd, partitionPaths,
+                    SentinelPostProcessor.MERGED_WORKSPACE,
+                    env, ws, launcher, listener);
+            reportWs = SentinelPostProcessor.MERGED_WORKSPACE;
+        } else {
+            reportWs = config.getWorkspace() != null
+                    ? config.getWorkspace() : ".sentinel";
+        }
 
-        final Path xmlPath = Path.of(
-                ws.getRemote(),
+        SentinelPostProcessor.reportAndJudge(
+                sentinelCmd, reportWs, srcDir,
                 config.getOutputDir(),
-                "mutations.xml");
-        final SentinelResult sentinelResult =
-                SentinelResultParser.parse(xmlPath);
-
-        final SentinelBuildAction action =
-                new SentinelBuildAction(sentinelResult);
-        action.setRun(build);
-        build.addAction(action);
-
-        listener.getLogger().printf(
-                "[Sentinel] Score: %.1f%% "
-                        + "(killed=%d, survived=%d, "
-                        + "skipped=%d)%n",
-                sentinelResult.overallScore().score(),
-                sentinelResult.overallScore().killed(),
-                sentinelResult.overallScore().survived(),
-                sentinelResult.overallScore().skipped());
-
-        applyThreshold(listener, build, sentinelResult);
-    }
-
-    private void applyThreshold(
-            final TaskListener listener,
-            final Run<?, ?> build,
-            final SentinelResult result) {
-        if (config.getThreshold() == null
-                || config.getThresholdAction() == null) {
-            return;
-        }
-        final double score = result.overallScore().score();
-        if (score < config.getThreshold()) {
-            listener.getLogger().printf(
-                    "[Sentinel] Score %.1f%% is below "
-                            + "threshold %.1f%% -> %s%n",
-                    score, config.getThreshold(),
-                    config.getThresholdAction());
-            switch (config.getThresholdAction()) {
-                case FAILURE ->
-                        build.setResult(Result.FAILURE);
-                case UNSTABLE ->
-                        build.setResult(Result.UNSTABLE);
-                default ->
-                        throw new IllegalStateException(
-                                "Unexpected action: "
-                                        + config.getThresholdAction());
-            }
-        }
+                config.getThreshold(),
+                config.getThresholdAction(),
+                env, ws, launcher, listener, build);
     }
 }

@@ -6,7 +6,6 @@
 package io.jenkins.plugins.sentinel;
 
 import java.io.Serializable;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,12 +15,10 @@ import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
-import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.util.ListBoxModel;
 import io.jenkins.plugins.sentinel.config.ThresholdAction;
-import io.jenkins.plugins.sentinel.model.SentinelResult;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
@@ -223,88 +220,27 @@ public class SentinelMergeStep extends Step implements Serializable {
             final String sentinelCmd = SentinelGlobalConfiguration
                     .getEffectivePath(step.sentinelPath);
             final String targetWs = step.workspace != null
-                    ? step.workspace : ".sentinel-merged";
+                    ? step.workspace
+                    : SentinelPostProcessor.MERGED_WORKSPACE;
 
-            // Phase 1: Merge partitions
-            final List<String> mergeArgs = SentinelCommandBuilder
-                    .buildMergeArgs(step.partitions, targetWs);
-            mergeArgs.add(0, sentinelCmd);
-            SentinelRunner.run(mergeArgs, env, ws, launcher, listener);
+            SentinelPostProcessor.merge(
+                    sentinelCmd, step.partitions, targetWs,
+                    env, ws, launcher, listener);
 
-            // Phase 2: Generate report and apply threshold (if outputDir set)
             if (step.outputDir != null) {
-                runReport(listener, ws, launcher, env, build,
-                        sentinelCmd, targetWs);
+                final String srcDir = step.sourceDir != null
+                        ? step.sourceDir
+                        : SentinelPostProcessor.DEFAULT_SOURCE_DIR;
+                final ThresholdAction action = step.thresholdAction != null
+                        ? ThresholdAction.fromString(step.thresholdAction)
+                        : null;
+                SentinelPostProcessor.reportAndJudge(
+                        sentinelCmd, targetWs, srcDir,
+                        step.outputDir, step.threshold, action,
+                        env, ws, launcher, listener, build);
             }
 
             return null;
-        }
-
-        private void runReport(
-                final TaskListener listener,
-                final FilePath ws,
-                final Launcher launcher,
-                final Map<String, String> env,
-                final Run<?, ?> build,
-                final String sentinelCmd,
-                final String targetWs) throws Exception {
-            final String srcDir = step.sourceDir != null
-                    ? step.sourceDir : ".";
-            final List<String> reportArgs =
-                    SentinelCommandBuilder.buildReportArgs(
-                            targetWs, srcDir, step.outputDir);
-            reportArgs.add(0, sentinelCmd);
-            SentinelRunner.run(reportArgs, env, ws, launcher, listener);
-
-            // Phase 3: Parse results and attach
-            final Path xmlPath = Path.of(
-                    ws.getRemote(), step.outputDir, "mutations.xml");
-            final SentinelResult result =
-                    SentinelResultParser.parse(xmlPath);
-
-            final SentinelBuildAction action =
-                    new SentinelBuildAction(result);
-            action.setRun(build);
-            build.addAction(action);
-
-            listener.getLogger().printf(
-                    "[Sentinel] Score: %.1f%% "
-                            + "(killed=%d, survived=%d, "
-                            + "skipped=%d)%n",
-                    result.overallScore().score(),
-                    result.overallScore().killed(),
-                    result.overallScore().survived(),
-                    result.overallScore().skipped());
-
-            // Phase 4: Threshold judgment
-            applyThreshold(listener, build, result);
-        }
-
-        private void applyThreshold(
-                final TaskListener listener,
-                final Run<?, ?> build,
-                final SentinelResult result) {
-            if (step.threshold == null || step.thresholdAction == null) {
-                return;
-            }
-            final ThresholdAction action =
-                    ThresholdAction.fromString(step.thresholdAction);
-            final double score = result.overallScore().score();
-            if (score < step.threshold) {
-                listener.getLogger().printf(
-                        "[Sentinel] Score %.1f%% is below "
-                                + "threshold %.1f%% -> %s%n",
-                        score, step.threshold, action);
-                switch (action) {
-                    case FAILURE ->
-                            build.setResult(Result.FAILURE);
-                    case UNSTABLE ->
-                            build.setResult(Result.UNSTABLE);
-                    default ->
-                            throw new IllegalStateException(
-                                    "Unexpected action: " + action);
-                }
-            }
         }
     }
 

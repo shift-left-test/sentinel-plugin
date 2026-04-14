@@ -17,10 +17,14 @@
         <Bug pattern="MC_OVERRIDABLE_METHOD_CALL_IN_CONSTRUCTOR"/>
     </Match>
 
-    <!-- AfterPartitionCallback: inner class holds reference to outer StepExecution
+    <!-- CPS callbacks: inner classes hold reference to outer StepExecution
          which is required to access getContext(); outer class is also Serializable -->
     <Match>
         <Class name="io.jenkins.plugins.sentinel.SentinelOrchestrator$AfterPartitionCallback"/>
+        <Bug pattern="SE_INNER_CLASS"/>
+    </Match>
+    <Match>
+        <Class name="io.jenkins.plugins.sentinel.SentinelOrchestrator$MultiPartitionCallback"/>
         <Bug pattern="SE_INNER_CLASS"/>
     </Match>
 
