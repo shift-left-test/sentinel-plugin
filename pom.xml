@@ -265,6 +265,23 @@
                         </executions>
                     </plugin>
 
+                    <!-- JXR (Source cross-reference for PMD/Checkstyle reports) -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jxr-plugin</artifactId>
+                        <version>3.6.0</version>
+                        <executions>
+                            <execution>
+                                <id>jxr-generate</id>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>jxr</goal>
+                                    <goal>test-jxr</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
                     <!-- SpotBugs -->
                     <plugin>
                         <groupId>com.github.spotbugs</groupId>
