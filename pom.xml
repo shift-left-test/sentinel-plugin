@@ -116,14 +116,18 @@
                 <artifactId>license-maven-plugin</artifactId>
                 <version>4.6</version>
                 <configuration>
-                    <header>src/license/header.txt</header>
+                    <licenseSets>
+                        <licenseSet>
+                            <header>src/license/header.txt</header>
+                            <includes>
+                                <include>src/**/*.java</include>
+                            </includes>
+                        </licenseSet>
+                    </licenseSets>
                     <properties>
                         <year>2026</year>
                         <owner>LG Electronics, Inc.</owner>
                     </properties>
-                    <includes>
-                        <include>src/**/*.java</include>
-                    </includes>
                     <mapping>
                         <java>SLASHSTAR_STYLE</java>
                     </mapping>
