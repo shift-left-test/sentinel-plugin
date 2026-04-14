@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import java.nio.file.Path;
@@ -33,6 +38,7 @@ import org.jenkinsci.plugins.workflow.steps.StepExecution;
  *
  * <p>Uses CPS body execution to run the user-provided closure.</p>
  */
+
 public class SentinelOrchestrator extends StepExecution {
 
     private static final long serialVersionUID = 1L;

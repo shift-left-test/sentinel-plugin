@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel.config;
 
 import static org.assertj.core.api.Assertions.assertThat;

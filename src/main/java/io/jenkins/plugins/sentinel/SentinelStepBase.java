@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import java.io.Serializable;
@@ -14,6 +19,7 @@ import org.kohsuke.stapler.DataBoundSetter;
  * {@link #populateConfiguration(SentinelConfiguration)} to copy
  * them into a {@link SentinelConfiguration} instance.</p>
  */
+
 public abstract class SentinelStepBase extends Step
         implements Serializable {
 

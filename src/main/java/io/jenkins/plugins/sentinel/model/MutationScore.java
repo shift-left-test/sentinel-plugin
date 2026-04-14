@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel.model;
 
 import java.io.Serializable;
@@ -10,6 +15,7 @@ import java.util.Objects;
  * Skipped mutants (build failures, timeouts, runtime errors)
  * are excluded from the score calculation.</p>
  */
+
 public final class MutationScore implements Serializable {
 
     private static final long serialVersionUID = 1L;

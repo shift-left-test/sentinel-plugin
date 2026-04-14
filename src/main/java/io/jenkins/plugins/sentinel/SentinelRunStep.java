@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import java.util.List;
@@ -32,6 +37,7 @@ import org.kohsuke.stapler.DataBoundSetter;
  * )
  * </pre>
  */
+
 public class SentinelRunStep extends SentinelStepBase {
 
     private static final long serialVersionUID = 1L;

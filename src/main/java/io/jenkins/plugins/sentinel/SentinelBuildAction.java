@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import java.util.LinkedHashMap;
@@ -15,6 +20,7 @@ import net.sf.json.JSONObject;
  * Attaches mutation testing results to a Jenkins build.
  * Provides data for build page sidebar and summary.
  */
+
 public class SentinelBuildAction implements RunAction2 {
 
     /** Score threshold for green color (80% or above). */

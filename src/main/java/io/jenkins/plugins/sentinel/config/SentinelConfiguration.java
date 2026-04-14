@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel.config;
 
 import java.io.Serializable;
@@ -8,6 +13,7 @@ import java.util.List;
  * Mutable configuration data class holding all sentinel CLI options
  * and plugin-specific options.
  */
+
 public class SentinelConfiguration implements Serializable {
 
     private static final long serialVersionUID = 1L;

@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import hudson.Extension;
@@ -8,6 +13,7 @@ import org.kohsuke.stapler.DataBoundSetter;
  * Global configuration for the Sentinel plugin.
  * Configurable via Manage Jenkins > System Configuration.
  */
+
 @Extension
 public class SentinelGlobalConfiguration extends GlobalConfiguration {
 

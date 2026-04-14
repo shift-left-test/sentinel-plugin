@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel.model;
 
 import java.io.Serializable;
@@ -5,6 +10,7 @@ import java.io.Serializable;
 /**
  * A single mutation entry parsed from mutations.xml.
  */
+
 public record MutationEntry(
         String sourceFile,
         String sourceFilePath,

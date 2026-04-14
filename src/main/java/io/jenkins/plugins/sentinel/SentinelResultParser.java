@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import java.io.IOException;
@@ -24,6 +29,7 @@ import org.xml.sax.SAXException;
  * Parses sentinel's mutations.xml (PITest-compatible format)
  * into a SentinelResult.
  */
+
 public final class SentinelResultParser {
 
     private static final String DETECTED_SKIP = "skip";

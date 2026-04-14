@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel.model;
 
 import java.io.Serializable;
@@ -9,6 +14,7 @@ import java.util.List;
  * Aggregate mutation testing result containing overall score,
  * per-file results, and individual mutation entries.
  */
+
 public record SentinelResult(
         MutationScore overallScore,
         List<FileMutationResult> fileResults,

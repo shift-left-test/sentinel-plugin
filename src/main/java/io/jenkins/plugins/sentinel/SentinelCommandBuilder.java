@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import java.util.ArrayList;
@@ -9,6 +14,7 @@ import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
  * Builds sentinel CLI argument lists from configuration.
  * Never includes --threshold (plugin handles threshold judgment).
  */
+
 public final class SentinelCommandBuilder {
 
     private SentinelCommandBuilder() {

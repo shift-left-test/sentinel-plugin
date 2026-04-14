@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import java.util.Collection;
@@ -19,6 +24,7 @@ import jenkins.model.TransientActionFactory;
  * last completed build has a {@link SentinelBuildAction}, the
  * factory returns a {@link SentinelProjectAction} for the job.</p>
  */
+
 @Extension
 public class SentinelProjectActionFactory
         extends TransientActionFactory<Job> {

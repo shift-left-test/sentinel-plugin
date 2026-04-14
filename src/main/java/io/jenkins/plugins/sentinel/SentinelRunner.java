@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import java.util.List;
@@ -10,6 +15,7 @@ import hudson.model.TaskListener;
 /**
  * Utility for executing sentinel CLI commands via the Jenkins launcher.
  */
+
 final class SentinelRunner {
 
     private SentinelRunner() {

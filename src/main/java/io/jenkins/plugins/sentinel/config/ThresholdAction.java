@@ -1,8 +1,14 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel.config;
 
 /**
  * Action to take when mutation score falls below threshold.
  */
+
 public enum ThresholdAction {
 
     FAILURE,

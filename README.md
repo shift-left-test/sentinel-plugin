@@ -318,4 +318,4 @@ mvn hpi:run -Dport=9090
 
 ## License
 
-MIT License
+The project source code is available under the MIT license. See [LICENSE](LICENSE).

@@ -1,8 +1,14 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel.config;
 
 /**
  * Validates a SentinelConfiguration for required fields and value ranges.
  */
+
 public final class SentinelConfigValidator {
 
     private static final int MIN_PARTITIONS = 1;

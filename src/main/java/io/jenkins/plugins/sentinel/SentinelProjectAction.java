@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 LG Electronics, Inc. Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ */
+
 package io.jenkins.plugins.sentinel;
 
 import java.util.ArrayList;
@@ -16,6 +21,7 @@ import net.sf.json.JSONObject;
  * across recent builds. Displayed on the project page sidebar
  * and used by the trend chart.
  */
+
 public class SentinelProjectAction implements Action {
 
     /** Maximum number of builds to include in trend data. */
