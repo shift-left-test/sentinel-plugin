@@ -14,13 +14,15 @@ import org.junit.jupiter.api.Test;
 class SentinelPostProcessorTest {
 
     private static final String SENTINEL_CMD = "sentinel";
+    private static final String SENTINEL_1 = ".sentinel-1";
+    private static final String MERGED_WS = ".sentinel-merged";
 
     @Test
     void buildsMergeCommandForMultiplePartitions() {
         final List<String> args = SentinelPostProcessor.buildMergeCommand(
                 SENTINEL_CMD,
-                List.of(".sentinel-1", ".sentinel-2", ".sentinel-3"),
-                ".sentinel-merged");
+                List.of(SENTINEL_1, ".sentinel-2", ".sentinel-3"),
+                MERGED_WS);
 
         assertThat(args).containsExactly(
                 SENTINEL_CMD,
@@ -33,7 +35,7 @@ class SentinelPostProcessorTest {
     @Test
     void buildsReportCommand() {
         final List<String> args = SentinelPostProcessor.buildReportCommand(
-                SENTINEL_CMD, ".sentinel-merged", ".", "sentinel-report");
+                SENTINEL_CMD, MERGED_WS, ".", "sentinel-report");
 
         assertThat(args).containsExactly(
                 SENTINEL_CMD,
@@ -47,7 +49,7 @@ class SentinelPostProcessorTest {
         final List<String> paths = SentinelPostProcessor.partitionPaths(4);
 
         assertThat(paths).containsExactly(
-                ".sentinel-1", ".sentinel-2",
+                SENTINEL_1, ".sentinel-2",
                 ".sentinel-3", ".sentinel-4");
     }
 
@@ -55,6 +57,27 @@ class SentinelPostProcessorTest {
     void partitionPathsSinglePartition() {
         final List<String> paths = SentinelPostProcessor.partitionPaths(1);
 
-        assertThat(paths).containsExactly(".sentinel-1");
+        assertThat(paths).containsExactly(SENTINEL_1);
+    }
+
+    @Test
+    void partitionPathsZeroReturnsEmpty() {
+        final List<String> paths =
+                SentinelPostProcessor.partitionPaths(0);
+        assertThat(paths).isEmpty();
+    }
+
+    @Test
+    void buildsMergeCommandSinglePartition() {
+        final List<String> args =
+                SentinelPostProcessor.buildMergeCommand(
+                        SENTINEL_CMD,
+                        List.of(SENTINEL_1),
+                        MERGED_WS);
+
+        assertThat(args).containsExactly(
+                SENTINEL_CMD,
+                "--merge-partition=.sentinel-1",
+                "--workspace=.sentinel-merged");
     }
 }

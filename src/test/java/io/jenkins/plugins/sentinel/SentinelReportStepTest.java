@@ -7,6 +7,14 @@ package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Set;
+
+import hudson.EnvVars;
+import hudson.FilePath;
+import hudson.Launcher;
+import hudson.model.Run;
+import hudson.model.TaskListener;
+import hudson.util.ListBoxModel;
 import org.junit.jupiter.api.Test;
 
 class SentinelReportStepTest {
@@ -62,5 +70,42 @@ class SentinelReportStepTest {
         step.setSentinelPath("/usr/bin/sentinel");
         assertThat(step.getSentinelPath())
                 .isEqualTo("/usr/bin/sentinel");
+    }
+
+    @Test
+    void descriptorFunctionName() {
+        final SentinelReportStep.DescriptorImpl descriptor =
+                new SentinelReportStep.DescriptorImpl();
+        assertThat(descriptor.getFunctionName())
+                .isEqualTo("sentinelReport");
+    }
+
+    @Test
+    void descriptorDisplayName() {
+        final SentinelReportStep.DescriptorImpl descriptor =
+                new SentinelReportStep.DescriptorImpl();
+        assertThat(descriptor.getDisplayName()).isNotBlank();
+    }
+
+    @Test
+    void descriptorRequiresCorrectContext() {
+        final SentinelReportStep.DescriptorImpl descriptor =
+                new SentinelReportStep.DescriptorImpl();
+        assertThat(descriptor.getRequiredContext())
+                .isEqualTo(Set.of(FilePath.class,
+                        Launcher.class,
+                        TaskListener.class,
+                        EnvVars.class,
+                        Run.class));
+    }
+
+    @Test
+    void descriptorFillsThresholdActionItems() {
+        final SentinelReportStep.DescriptorImpl descriptor =
+                new SentinelReportStep.DescriptorImpl();
+        final ListBoxModel items =
+                descriptor.doFillThresholdActionItems();
+        assertThat(items).hasSizeGreaterThanOrEqualTo(3);
+        assertThat(items.get(0).value).isEmpty();
     }
 }

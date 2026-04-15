@@ -171,6 +171,54 @@ class SentinelEnvironmentTest {
                 .isEqualTo(".sentinel-4");
     }
 
+    @Test
+    void parseBooleanIsCaseInsensitive() {
+        final Map<String, String> env = new HashMap<>(requiredEnv());
+        env.put("SENTINEL_VERBOSE", "TRUE");
+        env.put("SENTINEL_CLEAN", "True");
+
+        final SentinelConfiguration config =
+                SentinelEnvironment.toConfiguration(env);
+
+        assertThat(config.isVerbose()).isTrue();
+        assertThat(config.isClean()).isTrue();
+    }
+
+    @Test
+    void emptyEnvVarLeavesListEmpty() {
+        final Map<String, String> env = new HashMap<>(requiredEnv());
+        env.put("SENTINEL_PATTERNS", "");
+
+        final SentinelConfiguration config =
+                SentinelEnvironment.toConfiguration(env);
+
+        assertThat(config.getPatterns()).isEmpty();
+    }
+
+    @Test
+    void singleItemList() {
+        final Map<String, String> env = new HashMap<>(requiredEnv());
+        env.put("SENTINEL_OPERATORS", "AOR");
+
+        final SentinelConfiguration config =
+                SentinelEnvironment.toConfiguration(env);
+
+        assertThat(config.getOperators()).containsExactly("AOR");
+    }
+
+    @Test
+    void emptyEnvMapProducesEmptyConfig() {
+        final SentinelConfiguration config =
+                SentinelEnvironment.toConfiguration(Map.of());
+
+        assertThat(config.getBuildCommand()).isNull();
+        assertThat(config.getTestCommand()).isNull();
+        assertThat(config.getTestResultDir()).isNull();
+        assertThat(config.getSeed()).isNull();
+        assertThat(config.isVerbose()).isFalse();
+        assertThat(config.getPatterns()).isEmpty();
+    }
+
     private Map<String, String> requiredEnv() {
         return Map.of(
                 "SENTINEL_BUILD_COMMAND", "make all",

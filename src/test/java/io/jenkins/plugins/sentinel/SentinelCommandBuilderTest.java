@@ -125,4 +125,59 @@ class SentinelCommandBuilderTest {
         config.setTestResultDir("test-results/");
         return config;
     }
+
+    @Test
+    void emptyListsAreOmitted() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setPatterns(List.of());
+        config.setOperators(List.of());
+        final List<String> args =
+                SentinelCommandBuilder.buildRunArgs(config);
+        assertThat(args).noneMatch(
+                arg -> arg.contains("--pattern"));
+        assertThat(args).noneMatch(
+                arg -> arg.contains("--operator"));
+    }
+
+    @Test
+    void emptyStringFieldsAreOmitted() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setSourceDir("");
+        config.setFrom("");
+        final List<String> args =
+                SentinelCommandBuilder.buildRunArgs(config);
+        assertThat(args).noneMatch(
+                arg -> arg.contains("--source-dir"));
+        assertThat(args).noneMatch(
+                arg -> arg.contains("--from"));
+    }
+
+    @Test
+    void allOptionsPopulated() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setSourceDir("src");
+        config.setPartitionIndex(2);
+        config.setPartitionTotal(4);
+        config.setSeed(42L);
+        config.setTimeout(300);
+        config.setClean(true);
+        config.setVerbose(true);
+        config.setDryRun(true);
+        config.setUncommitted(true);
+        config.setPatterns(List.of("**/*.c"));
+        config.setOperators(List.of("AOR"));
+        final List<String> args =
+                SentinelCommandBuilder.buildRunArgs(config);
+        assertThat(args).contains(
+                "--source-dir=src",
+                "--partition=2/4",
+                "--seed=42",
+                "--timeout=300",
+                "--clean",
+                "--verbose",
+                "--dry-run",
+                "--uncommitted",
+                "--pattern=**/*.c",
+                "--operator=AOR");
+    }
 }

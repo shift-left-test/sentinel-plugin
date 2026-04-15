@@ -9,7 +9,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
+import hudson.EnvVars;
+import hudson.FilePath;
+import hudson.Launcher;
+import hudson.model.Run;
+import hudson.model.TaskListener;
 import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
 import org.junit.jupiter.api.Test;
 
@@ -179,5 +185,33 @@ class SentinelRunStepTest {
         assertThat(config.getPartitionIndex()).isNull();
         assertThat(config.getSeed()).isNull();
         assertThat(config.getWorkspace()).isNull();
+    }
+
+    @Test
+    void descriptorFunctionName() {
+        final SentinelRunStep.DescriptorImpl descriptor =
+                new SentinelRunStep.DescriptorImpl();
+        assertThat(descriptor.getFunctionName())
+                .isEqualTo("sentinelRun");
+    }
+
+    @Test
+    void descriptorDisplayName() {
+        final SentinelRunStep.DescriptorImpl descriptor =
+                new SentinelRunStep.DescriptorImpl();
+        assertThat(descriptor.getDisplayName()).isNotBlank();
+    }
+
+    @Test
+    void descriptorRequiresCorrectContext() {
+        final SentinelRunStep.DescriptorImpl descriptor =
+                new SentinelRunStep.DescriptorImpl();
+        assertThat(descriptor.getRequiredContext())
+                .isEqualTo(Set.of(
+                        FilePath.class,
+                        Launcher.class,
+                        TaskListener.class,
+                        EnvVars.class,
+                        Run.class));
     }
 }

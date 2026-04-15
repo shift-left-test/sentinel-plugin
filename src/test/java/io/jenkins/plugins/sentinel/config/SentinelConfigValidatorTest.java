@@ -148,6 +148,44 @@ class SentinelConfigValidatorTest {
         assertThat(config.getThreshold()).isNull();
     }
 
+    @Test
+    void thresholdZeroIsValid() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setThreshold(0.0);
+        config.setThresholdAction(ThresholdAction.FAILURE);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getThreshold()).isEqualTo(0.0);
+    }
+
+    @Test
+    void thresholdHundredIsValid() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setThreshold(100.0);
+        config.setThresholdAction(ThresholdAction.UNSTABLE);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getThreshold()).isEqualTo(100.0);
+    }
+
+    @Test
+    void partitionIndexEqualsTotal() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setPartitionIndex(4);
+        config.setPartitionTotal(4);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getPartitionIndex()).isEqualTo(4);
+    }
+
+    @Test
+    void negativePartitionIndexThrows() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setPartitionIndex(-1);
+        config.setPartitionTotal(4);
+        assertThatThrownBy(
+                () -> SentinelConfigValidator.validate(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("partitionIndex");
+    }
+
     private SentinelConfiguration minimalConfig() {
         final SentinelConfiguration config = new SentinelConfiguration();
         config.setBuildCommand("make all");
