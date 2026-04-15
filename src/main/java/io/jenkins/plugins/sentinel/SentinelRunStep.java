@@ -5,6 +5,7 @@
 
 package io.jenkins.plugins.sentinel;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -14,8 +15,12 @@ import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
+import hudson.model.Run;
 import hudson.model.TaskListener;
+import io.jenkins.plugins.sentinel.config.SentinelConfigValidator;
 import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
+import org.jenkinsci.plugins.workflow.flow.StashManager;
+import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
@@ -24,115 +29,273 @@ import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
 /**
- * Pipeline step that runs sentinel on a single partition.
+ * Pipeline step that runs sentinel mutation testing.
+ *
+ * <p>All fields are optional. Configuration is read from
+ * SENTINEL_* environment variables. Step-level parameters
+ * override environment values when both are set.</p>
  *
  * <p>Usage in Jenkinsfile:</p>
  * <pre>
- * sentinelRun(
- *     buildCommand: 'make all',
- *     testCommand: 'make test',
- *     testResultDir: 'test-results/',
- *     partition: '1/4',
- *     seed: 12345
- * )
+ * sentinelRun()
+ * sentinelRun(partitionIndex: 1)
+ * sentinelRun(buildCommand: 'cmake --build .', verbose: true)
  * </pre>
  */
 
-public class SentinelRunStep extends SentinelStepBase {
+public class SentinelRunStep extends Step implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private String partition;
+    private Integer partitionIndex;
+    private String buildCommand;
+    private String testCommand;
+    private String testResultDir;
+    private String sourceDir;
+    private Long seed;
+    private Boolean verbose;
+    private String workspace;
+    private String sentinelPath;
 
     /**
-     * Creates a new SentinelRunStep with required fields.
-     *
-     * @param buildCommand  build command
-     * @param testCommand   test command
-     * @param testResultDir test result directory
+     * Creates a new SentinelRunStep with no required fields.
      */
     @DataBoundConstructor
-    public SentinelRunStep(
-            final String buildCommand,
-            final String testCommand,
-            final String testResultDir) {
-        super(buildCommand, testCommand, testResultDir);
+    public SentinelRunStep() {
+        super();
     }
 
     /**
-     * Returns the partition spec.
+     * Returns the partition index.
      *
-     * @return partition spec
+     * @return partition index, or null if not set
      */
-    public String getPartition() {
-        return partition;
+    public Integer getPartitionIndex() {
+        return partitionIndex;
     }
 
     /**
-     * Sets the partition spec.
+     * Sets the partition index.
      *
-     * @param v partition spec
+     * @param v partition index (1-based)
      */
     @DataBoundSetter
-    public void setPartition(final String v) {
-        partition = v;
+    public void setPartitionIndex(final Integer v) {
+        partitionIndex = v;
     }
 
     /**
-     * Converts this step's fields into a SentinelConfiguration.
+     * Returns the build command.
      *
-     * @return populated SentinelConfiguration
+     * @return build command, or null if not set
      */
-    public SentinelConfiguration toConfiguration() {
-        final SentinelConfiguration c = new SentinelConfiguration();
-        populateConfiguration(c);
-        c.setPartition(partition);
-        return c;
+    public String getBuildCommand() {
+        return buildCommand;
     }
 
     /**
-     * Converts this step's fields into a SentinelConfiguration,
-     * auto-detecting partition, workspace, and seed from environment
-     * variables when not explicitly set.
+     * Sets the build command.
      *
-     * <p>Environment variables checked:</p>
-     * <ul>
-     *   <li>SENTINEL_PARTITION_INDEX + SENTINEL_PARTITION_TOTAL
-     *       -> partition ("index/total"), workspace (".sentinel-{index}")</li>
-     *   <li>SENTINEL_SEED -> seed</li>
-     * </ul>
+     * @param v build command
+     */
+    @DataBoundSetter
+    public void setBuildCommand(final String v) {
+        buildCommand = v;
+    }
+
+    /**
+     * Returns the test command.
+     *
+     * @return test command, or null if not set
+     */
+    public String getTestCommand() {
+        return testCommand;
+    }
+
+    /**
+     * Sets the test command.
+     *
+     * @param v test command
+     */
+    @DataBoundSetter
+    public void setTestCommand(final String v) {
+        testCommand = v;
+    }
+
+    /**
+     * Returns the test result directory.
+     *
+     * @return test result directory, or null if not set
+     */
+    public String getTestResultDir() {
+        return testResultDir;
+    }
+
+    /**
+     * Sets the test result directory.
+     *
+     * @param v test result directory
+     */
+    @DataBoundSetter
+    public void setTestResultDir(final String v) {
+        testResultDir = v;
+    }
+
+    /**
+     * Returns the source directory.
+     *
+     * @return source directory, or null if not set
+     */
+    public String getSourceDir() {
+        return sourceDir;
+    }
+
+    /**
+     * Sets the source directory.
+     *
+     * @param v source directory
+     */
+    @DataBoundSetter
+    public void setSourceDir(final String v) {
+        sourceDir = v;
+    }
+
+    /**
+     * Returns the random seed.
+     *
+     * @return seed, or null if not set
+     */
+    public Long getSeed() {
+        return seed;
+    }
+
+    /**
+     * Sets the random seed.
+     *
+     * @param v seed
+     */
+    @DataBoundSetter
+    public void setSeed(final Long v) {
+        seed = v;
+    }
+
+    /**
+     * Returns whether verbose output is enabled.
+     *
+     * @return verbose flag, or null if not set
+     */
+    public Boolean isVerbose() {
+        return verbose;
+    }
+
+    /**
+     * Sets whether verbose output is enabled.
+     *
+     * @param v verbose flag
+     */
+    @DataBoundSetter
+    public void setVerbose(final Boolean v) {
+        verbose = v;
+    }
+
+    /**
+     * Returns the sentinel workspace directory.
+     *
+     * @return workspace, or null if not set
+     */
+    public String getWorkspace() {
+        return workspace;
+    }
+
+    /**
+     * Sets the sentinel workspace directory.
+     *
+     * @param v workspace
+     */
+    @DataBoundSetter
+    public void setWorkspace(final String v) {
+        workspace = v;
+    }
+
+    /**
+     * Returns the sentinel executable path override.
+     *
+     * @return sentinel path, or null if not set
+     */
+    public String getSentinelPath() {
+        return sentinelPath;
+    }
+
+    /**
+     * Sets the sentinel executable path override.
+     *
+     * @param v sentinel path
+     */
+    @DataBoundSetter
+    public void setSentinelPath(final String v) {
+        sentinelPath = v;
+    }
+
+    /**
+     * Builds a SentinelConfiguration by first reading environment
+     * variables via {@link SentinelEnvironment#toConfiguration},
+     * then applying any non-null step-level overrides.
+     *
+     * <p>If {@code partitionIndex} is set and workspace is not
+     * explicitly set, auto-assigns the workspace to
+     * {@code .sentinel-{index}}.</p>
      *
      * @param env environment variables
      * @return populated SentinelConfiguration
      */
-    public SentinelConfiguration toConfiguration(
+    SentinelConfiguration toConfiguration(
             final Map<String, String> env) {
-        final SentinelConfiguration c = new SentinelConfiguration();
-        populateConfiguration(c);
-        c.setPartition(partition);
+        final SentinelConfiguration config =
+                SentinelEnvironment.toConfiguration(env);
+        applyOverrides(config);
+        applyAutoWorkspace(config);
+        return config;
+    }
 
-        final String envIndex = env.get(
-                SentinelPostProcessor.ENV_PARTITION_INDEX);
-        final String envTotal = env.get(
-                SentinelPostProcessor.ENV_PARTITION_TOTAL);
-        if (c.getPartition() == null
-                && envIndex != null && envTotal != null) {
-            c.setPartition(envIndex + "/" + envTotal);
+    @SuppressWarnings("PMD.NPathComplexity")
+    private void applyOverrides(final SentinelConfiguration c) {
+        if (buildCommand != null) {
+            c.setBuildCommand(buildCommand);
         }
-        if (c.getWorkspace() == null
-                && envIndex != null) {
-            c.setWorkspace(
-                    SentinelPostProcessor.PARTITION_PREFIX
-                            + envIndex);
+        if (testCommand != null) {
+            c.setTestCommand(testCommand);
         }
+        if (testResultDir != null) {
+            c.setTestResultDir(testResultDir);
+        }
+        if (sourceDir != null) {
+            c.setSourceDir(sourceDir);
+        }
+        if (seed != null) {
+            c.setSeed(seed);
+        }
+        if (verbose != null) {
+            c.setVerbose(verbose);
+        }
+        if (workspace != null) {
+            c.setWorkspace(workspace);
+        }
+        if (sentinelPath != null) {
+            c.setSentinelPath(sentinelPath);
+        }
+        if (partitionIndex != null) {
+            c.setPartitionIndex(partitionIndex);
+        }
+    }
 
-        final String envSeed = env.get(
-                SentinelPostProcessor.ENV_SEED);
-        if (c.getSeed() == null && envSeed != null) {
-            c.setSeed(Long.parseLong(envSeed));
+    private void applyAutoWorkspace(
+            final SentinelConfiguration config) {
+        if (config.getWorkspace() == null
+                && config.getPartitionIndex() != null) {
+            config.setWorkspace(
+                    SentinelEnvironment.partitionWorkspace(
+                            config.getPartitionIndex()));
         }
-
-        return c;
     }
 
     @Override
@@ -147,9 +310,9 @@ public class SentinelRunStep extends SentinelStepBase {
         private final SentinelRunStep step;
 
         SentinelRunExecution(final StepContext context,
-                             final SentinelRunStep step) {
+                             final SentinelRunStep stepRef) {
             super(context);
-            this.step = step;
+            this.step = stepRef;
         }
 
         @Override
@@ -161,9 +324,12 @@ public class SentinelRunStep extends SentinelStepBase {
                     .get(Launcher.class);
             final Map<String, String> env =
                     getContext().get(EnvVars.class);
+            final Run<?, ?> build = getContext().get(Run.class);
 
             final SentinelConfiguration config =
                     step.toConfiguration(env);
+            SentinelConfigValidator.validate(config);
+
             final String sentinelCmd = SentinelGlobalConfiguration
                     .getEffectivePath(config.getSentinelPath());
 
@@ -172,7 +338,37 @@ public class SentinelRunStep extends SentinelStepBase {
             args.add(0, sentinelCmd);
 
             SentinelRunner.run(args, env, ws, launcher, listener);
+
+            stashResults(ws, config, listener, build);
             return 0;
+        }
+
+        private void stashResults(
+                final FilePath ws,
+                final SentinelConfiguration config,
+                final TaskListener listener,
+                final Run<?, ?> build) throws Exception {
+            final Integer idx = config.getPartitionIndex();
+            final String stashName;
+            final String stashDir;
+
+            if (idx != null) {
+                stashName = SentinelEnvironment.stashName(idx);
+                stashDir = SentinelEnvironment
+                        .partitionWorkspace(idx);
+            } else {
+                stashName = SentinelEnvironment.SINGLE_STASH_NAME;
+                stashDir = config.getWorkspace() != null
+                        ? config.getWorkspace() : ".";
+            }
+
+            listener.getLogger().println(
+                    "[Sentinel] Stashing results: "
+                            + stashName + " from " + stashDir);
+
+            StashManager.stash(
+                    build, stashName, ws.child(stashDir),
+                    listener, "**", null, false, true);
         }
     }
 
@@ -190,14 +386,15 @@ public class SentinelRunStep extends SentinelStepBase {
         @NonNull
         @Override
         public String getDisplayName() {
-            return "Run mutation test";
+            return "Run sentinel mutation testing";
         }
 
         @Override
         public Set<? extends Class<?>> getRequiredContext() {
             return Set.of(
                     FilePath.class, Launcher.class,
-                    TaskListener.class, EnvVars.class);
+                    TaskListener.class, EnvVars.class,
+                    Run.class);
         }
     }
 }

@@ -11,7 +11,6 @@ package io.jenkins.plugins.sentinel.config;
 
 public final class SentinelConfigValidator {
 
-    private static final int MIN_PARTITIONS = 1;
     private static final double MAX_THRESHOLD = 100.0;
 
     private SentinelConfigValidator() {
@@ -29,10 +28,18 @@ public final class SentinelConfigValidator {
         requireNonBlank(config.getTestCommand(), "testCommand");
         requireNonBlank(config.getTestResultDir(), "testResultDir");
 
-        if (config.getPartitions() < MIN_PARTITIONS) {
-            throw new IllegalArgumentException(
-                    "partitions must be >= 1, got: "
-                            + config.getPartitions());
+        if (config.getPartitionIndex() != null) {
+            if (config.getPartitionTotal() == null) {
+                throw new IllegalArgumentException(
+                        "partitionTotal is required when partitionIndex is set");
+            }
+            if (config.getPartitionIndex() < 1
+                    || config.getPartitionIndex() > config.getPartitionTotal()) {
+                throw new IllegalArgumentException(
+                        "partitionIndex must be between 1 and partitionTotal ("
+                                + config.getPartitionTotal() + "), got: "
+                                + config.getPartitionIndex());
+            }
         }
 
         final Double threshold = config.getThreshold();

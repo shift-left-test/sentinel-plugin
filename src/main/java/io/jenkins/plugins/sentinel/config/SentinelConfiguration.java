@@ -51,14 +51,11 @@ public class SentinelConfiguration implements Serializable {
     private String outputDir;
 
     // Plugin-specific
-    private int partitions = 1;
-    private String nodeLabel = "";
+    private Integer partitionIndex;
+    private Integer partitionTotal;
     private Double threshold;
     private ThresholdAction thresholdAction;
     private String sentinelPath;
-
-    // Partition (set internally by orchestrator)
-    private String partition;
 
     /**
      * Returns the build command.
@@ -461,39 +458,52 @@ public class SentinelConfiguration implements Serializable {
     }
 
     /**
-     * Returns the number of partitions.
+     * Returns the 1-based partition index.
      *
-     * @return partitions count
+     * @return partition index
      */
-    public int getPartitions() {
-        return partitions;
+    public Integer getPartitionIndex() {
+        return partitionIndex;
     }
 
     /**
-     * Sets the number of partitions.
+     * Sets the 1-based partition index.
      *
-     * @param partitions partitions count
+     * @param partitionIndex partition index
      */
-    public void setPartitions(final int partitions) {
-        this.partitions = partitions;
+    public void setPartitionIndex(final Integer partitionIndex) {
+        this.partitionIndex = partitionIndex;
     }
 
     /**
-     * Returns the node label for partition execution.
+     * Returns the total number of partitions.
      *
-     * @return node label
+     * @return partition total
      */
-    public String getNodeLabel() {
-        return nodeLabel;
+    public Integer getPartitionTotal() {
+        return partitionTotal;
     }
 
     /**
-     * Sets the node label for partition execution.
+     * Sets the total number of partitions.
      *
-     * @param nodeLabel node label
+     * @param partitionTotal partition total
      */
-    public void setNodeLabel(final String nodeLabel) {
-        this.nodeLabel = nodeLabel;
+    public void setPartitionTotal(final Integer partitionTotal) {
+        this.partitionTotal = partitionTotal;
+    }
+
+    /**
+     * Returns the partition spec string for CLI (e.g. "2/4"),
+     * or null if partitionIndex is not set.
+     *
+     * @return partition spec or null
+     */
+    public String getPartitionSpec() {
+        if (partitionIndex == null || partitionTotal == null) {
+            return null;
+        }
+        return partitionIndex + "/" + partitionTotal;
     }
 
     /**
@@ -550,21 +560,4 @@ public class SentinelConfiguration implements Serializable {
         this.sentinelPath = sentinelPath;
     }
 
-    /**
-     * Returns the partition spec (e.g. "1/4").
-     *
-     * @return partition spec
-     */
-    public String getPartition() {
-        return partition;
-    }
-
-    /**
-     * Sets the partition spec (e.g. "1/4").
-     *
-     * @param partition partition spec
-     */
-    public void setPartition(final String partition) {
-        this.partition = partition;
-    }
 }

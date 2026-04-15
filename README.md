@@ -1,19 +1,17 @@
 # Sentinel Jenkins Plugin
 
-A Jenkins Pipeline plugin that **parallelizes [sentinel](https://github.com/shift-left-test/sentinel) mutation testing** across multiple nodes, reducing execution time by distributing partitions and merging results automatically.
+A Jenkins Pipeline plugin for **[sentinel](https://github.com/shift-left-test/sentinel) mutation testing**. Provides two composable pipeline steps (`sentinelRun` + `sentinelReport`) that integrate with standard Jenkins Declarative Pipeline for distributed execution and reporting.
 
 ## What It Does
 
 [Sentinel](https://github.com/shift-left-test/sentinel) is a mutation testing tool for C/C++ projects. It injects small faults (mutants) into your source code and checks whether your tests catch them. The **mutation score** tells you how effective your tests are.
 
-This plugin makes sentinel faster by:
+This plugin provides:
 
-1. **Splitting** the mutant list into N partitions (`--partition`)
-2. **Running** each partition on a separate Jenkins node in parallel
-3. **Merging** the results back together (`--merge-partition`)
-4. **Reporting** the combined mutation score with HTML reports
+1. **`sentinelRun`** — Runs sentinel with configuration from `SENTINEL_*` environment variables. Auto-stashes results.
+2. **`sentinelReport`** — Unstashes results, merges partitions, generates reports, applies threshold judgment, and displays results in Jenkins UI.
 
-A test suite that takes 2 hours with sentinel alone can finish in ~30 minutes with 4 partitions.
+For distributed execution, combine with standard Jenkins `parallel` stages to split work across multiple nodes, reducing execution time by ~1/N.
 
 ## Requirements
 
@@ -26,129 +24,26 @@ A test suite that takes 2 hours with sentinel alone can finish in ~30 minutes wi
 
 ### Single Node
 
-The simplest usage — no partitions, runs on the current agent:
+The simplest usage — runs sentinel on the current agent:
 
 ```groovy
 pipeline {
-    agent {
-        docker { image 'my-build-env:latest' }
+    agent { label 'linux' }
+    environment {
+        SENTINEL_BUILD_COMMAND = 'make all'
+        SENTINEL_TEST_COMMAND = 'make test'
+        SENTINEL_TEST_RESULT_DIR = 'test-results/'
     }
     stages {
         stage('Mutation Test') {
             steps {
                 checkout scm
-                script {
-                    sentinelPipeline(
-                        buildCommand: 'make all',
-                        testCommand: 'make test',
-                        testResultDir: 'test-results/',
-                        outputDir: 'sentinel-report'
-                    ) {
-                        checkout scm
-                        sh 'cmake . && make'
-                        sentinelRun()
-                    }
-                }
+                sentinelRun()
             }
         }
-    }
-}
-```
-
-### Closure Mode (Recommended)
-
-Distributes work across multiple nodes. The plugin handles partition assignment, stash/unstash, merge, and reporting:
-
-```groovy
-pipeline {
-    agent {
-        docker { image 'my-build-env:latest' }
-    }
-    stages {
-        stage('Mutation Test') {
+        stage('Report') {
             steps {
-                checkout scm
-                script {
-                    sentinelPipeline(
-                        buildCommand: 'make all',
-                        testCommand: 'make test',
-                        testResultDir: 'test-results/',
-                        partitions: 4,
-                        nodeLabel: 'linux',
-                        outputDir: 'sentinel-report',
-                        threshold: 80.0,
-                        thresholdAction: 'UNSTABLE'
-                    ) {
-                        docker.image('my-build-env:latest').inside {
-                            checkout scm
-                            sh 'cmake -B build . && cmake --build build -j$(nproc)'
-                            sentinelRun()
-                        }
-                    }
-                }
-            }
-        }
-    }
-    post {
-        always {
-            publishHTML(target: [
-                reportDir: 'sentinel-report',
-                reportFiles: 'index.html',
-                reportName: 'Mutation Report'
-            ])
-        }
-    }
-}
-```
-
-**How it works:**
-
-- The outer `agent` is the **merge node** where results are collected and reports are generated. It needs sentinel installed and source code checked out.
-- The `closure` block runs on **each partition node** (allocated via `nodeLabel`). It sets up the build environment and calls `sentinelRun()`.
-- The plugin automatically assigns partition numbers, manages stash/unstash, runs merge, generates reports, and applies threshold judgment.
-
-### Manual Mode (Advanced)
-
-For cases where you need different Docker images or configurations per partition:
-
-```groovy
-pipeline {
-    agent none
-    stages {
-        stage('Partition Test') {
-            parallel {
-                stage('Partition 1') {
-                    agent { docker { image 'my-build-env:latest' } }
-                    steps {
-                        checkout scm
-                        sh 'cmake . && make'
-                        sentinelRun(
-                            partition: '1/4',
-                            workspace: '.sentinel-1',
-                            buildCommand: 'make all',
-                            testCommand: 'make test',
-                            testResultDir: 'test-results/',
-                            seed: 12345
-                        )
-                        stash name: 'sentinel-1', includes: '.sentinel-1/**'
-                    }
-                }
-                // Repeat for partitions 2, 3, 4...
-            }
-        }
-        stage('Merge & Report') {
-            agent { docker { image 'my-build-env:latest' } }
-            steps {
-                checkout scm
-                unstash 'sentinel-1'
-                unstash 'sentinel-2'
-                unstash 'sentinel-3'
-                unstash 'sentinel-4'
-                sentinelMerge(
-                    partitions: ['.sentinel-1', '.sentinel-2', '.sentinel-3', '.sentinel-4'],
-                    workspace: '.sentinel-merged',
-                    sourceDir: '.',
-                    outputDir: 'sentinel-report',
+                sentinelReport(
                     threshold: 80.0,
                     thresholdAction: 'UNSTABLE'
                 )
@@ -158,84 +53,166 @@ pipeline {
 }
 ```
 
-**Manual mode caveats:**
-- Use the **same `seed`** across all partitions (otherwise merge will fail)
-- Use **unique `workspace` paths** per partition (otherwise unstash will overwrite)
-- All partitions must use the **same sentinel options** (buildCommand, testCommand, etc.)
+### Distributed (4 Partitions)
+
+Split mutation testing across multiple nodes for faster execution:
+
+```groovy
+pipeline {
+    agent none
+    environment {
+        SENTINEL_BUILD_COMMAND = 'make all'
+        SENTINEL_TEST_COMMAND = 'make test'
+        SENTINEL_TEST_RESULT_DIR = 'test-results/'
+        SENTINEL_SEED = "${System.currentTimeMillis()}"
+        SENTINEL_PARTITION_TOTAL = '4'
+    }
+    stages {
+        stage('Partition') {
+            parallel {
+                stage('Partition 1') {
+                    agent { label 'linux' }
+                    steps {
+                        checkout scm
+                        sentinelRun(partitionIndex: 1)
+                    }
+                }
+                stage('Partition 2') {
+                    agent { label 'linux' }
+                    steps {
+                        checkout scm
+                        sentinelRun(partitionIndex: 2)
+                    }
+                }
+                stage('Partition 3') {
+                    agent { label 'linux' }
+                    steps {
+                        checkout scm
+                        sentinelRun(partitionIndex: 3)
+                    }
+                }
+                stage('Partition 4') {
+                    agent { label 'linux' }
+                    steps {
+                        checkout scm
+                        sentinelRun(partitionIndex: 4)
+                    }
+                }
+            }
+        }
+        stage('Report') {
+            agent { label 'linux' }
+            steps {
+                checkout scm
+                sentinelReport(
+                    threshold: 80.0,
+                    thresholdAction: 'UNSTABLE'
+                )
+            }
+        }
+    }
+}
+```
+
+**How it works:**
+
+- Shared configuration lives in the `environment` block — all stages inherit it.
+- Each partition stage only differs by `partitionIndex`.
+- `sentinelRun` automatically stashes results; `sentinelReport` automatically unstashes, merges, generates reports, and applies threshold judgment.
+- The Report stage needs `checkout scm` because HTML reports embed source code.
+- All partitions must share the same `SENTINEL_SEED` for merge to work.
+
+### Docker
+
+Use Docker agents with the same pattern:
+
+```groovy
+stage('Partition 1') {
+    agent {
+        docker {
+            image 'my-build-env:latest'
+            label 'linux'
+        }
+    }
+    steps {
+        checkout scm
+        sentinelRun(partitionIndex: 1)
+    }
+}
+```
 
 ## Pipeline Steps
 
-### `sentinelPipeline`
-
-The main orchestration step. Distributes partitions, collects results, merges, and reports.
-
-**Required parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `buildCommand` | String | Build command (e.g., `make all`) |
-| `testCommand` | String | Test command (e.g., `make test`) |
-| `testResultDir` | String | Test result directory |
-
-**Common parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `partitions` | int | `1` | Number of partitions |
-| `nodeLabel` | String | `''` | Label for partition nodes |
-| `outputDir` | String | - | Report output directory |
-| `threshold` | double | - | Minimum mutation score (0.0-100.0) |
-| `thresholdAction` | String | - | Action on threshold failure: `FAILURE` or `UNSTABLE` |
-| `sourceDir` | String | `.` | Source root directory |
-| `sentinelPath` | String | `sentinel` | Path to sentinel executable |
-
-<details>
-<summary>Advanced parameters</summary>
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `compileDbDir` | String | `.` | compile_commands.json directory |
-| `timeout` | int | - | Test timeout in seconds |
-| `from` | String | - | Diff base revision (e.g., `HEAD~1`) |
-| `uncommitted` | boolean | `false` | Include uncommitted changes |
-| `patterns` | List | - | File glob patterns (`!` prefix to exclude) |
-| `extensions` | List | - | File extensions to mutate |
-| `generator` | String | `uniform` | Mutant generator: `uniform`, `random`, `weighted` |
-| `mutantsPerLine` | int | `1` | Max mutants per source line |
-| `seed` | long | auto | Random seed (auto-generated if omitted) |
-| `operators` | List | all | Mutation operators: `AOR`, `BOR`, `LCR`, `ROR`, `SDL`, `SOR`, `UOI` |
-| `limit` | int | `0` | Max mutants (0 = unlimited) |
-| `lcovTracefiles` | List | - | LCOV tracefiles to skip uncovered mutants |
-| `config` | String | - | Path to sentinel.yaml |
-| `clean` | boolean | `false` | Clear workspace before run |
-| `dryRun` | boolean | `false` | Generate mutants but don't evaluate |
-| `verbose` | boolean | `false` | Show detailed output |
-
-</details>
-
 ### `sentinelRun`
 
-Runs sentinel on a single partition. Used inside `sentinelPipeline` closure (auto-configured) or standalone in manual mode.
+Runs sentinel mutation testing. All parameters are optional — configuration comes from `SENTINEL_*` environment variables, with step parameters overriding env vars when both are set.
 
-Accepts the same parameters as `sentinelPipeline` plus:
+**Step-specific parameter:**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `partition` | String | Partition spec (e.g., `2/4`) |
+| `partitionIndex` | int | Partition index (1-based). Combined with `SENTINEL_PARTITION_TOTAL` env var. |
 
-### `sentinelMerge`
+**Override parameters** (override env vars when set):
 
-Merges partition results and generates reports. Used in manual mode only.
+| Parameter | Type | Env Var | Description |
+|-----------|------|---------|-------------|
+| `buildCommand` | String | `SENTINEL_BUILD_COMMAND` | Build command (e.g., `make all`) |
+| `testCommand` | String | `SENTINEL_TEST_COMMAND` | Test command (e.g., `make test`) |
+| `testResultDir` | String | `SENTINEL_TEST_RESULT_DIR` | Test result directory |
+| `sourceDir` | String | `SENTINEL_SOURCE_DIR` | Source root directory |
+| `seed` | long | `SENTINEL_SEED` | Random seed for reproducibility |
+| `verbose` | boolean | `SENTINEL_VERBOSE` | Show detailed output |
+| `workspace` | String | `SENTINEL_WORKSPACE` | Sentinel workspace directory |
+| `sentinelPath` | String | `SENTINEL_PATH` | Path to sentinel executable |
 
-| Parameter | Type | Required | Description |
-|-----------|------|:--------:|-------------|
-| `partitions` | List | Yes | Paths to partition workspaces |
-| `workspace` | String | | Target merge workspace |
-| `sourceDir` | String | | Source directory for HTML report |
-| `outputDir` | String | | Report output directory |
-| `threshold` | double | | Minimum mutation score |
-| `thresholdAction` | String | | `FAILURE` or `UNSTABLE` |
-| `sentinelPath` | String | | Path to sentinel executable |
+### `sentinelReport`
+
+Collects results, merges partitions, generates reports, and applies threshold judgment.
+
+| Parameter | Type | Env Var | Default | Description |
+|-----------|------|---------|---------|-------------|
+| `threshold` | double | - | - | Minimum mutation score (0.0-100.0) |
+| `thresholdAction` | String | - | - | Action on failure: `FAILURE` or `UNSTABLE` |
+| `sourceDir` | String | `SENTINEL_SOURCE_DIR` | `.` | Source directory for HTML reports |
+| `outputDir` | String | `SENTINEL_OUTPUT_DIR` | `sentinel-report` | Report output directory |
+| `sentinelPath` | String | `SENTINEL_PATH` | `sentinel` | Path to sentinel executable |
+
+**Behavior:**
+- If `SENTINEL_PARTITION_TOTAL` is set: unstashes all partition results, runs `sentinel --merge-partition`, then generates reports.
+- If not set: unstashes a single result and generates reports directly.
+- Threshold judgment: if score < threshold, sets build result to `FAILURE` or `UNSTABLE`.
+
+## Environment Variables
+
+All sentinel CLI options can be configured via `SENTINEL_*` environment variables in the pipeline `environment` block:
+
+| Variable | sentinel CLI Option | Type |
+|----------|---------------------|------|
+| `SENTINEL_BUILD_COMMAND` | `--build-command` | String (required) |
+| `SENTINEL_TEST_COMMAND` | `--test-command` | String (required) |
+| `SENTINEL_TEST_RESULT_DIR` | `--test-result-dir` | String (required) |
+| `SENTINEL_PARTITION_TOTAL` | `--partition` (denominator) | Integer |
+| `SENTINEL_SEED` | `--seed` | Long |
+| `SENTINEL_SOURCE_DIR` | `--source-dir` | String |
+| `SENTINEL_COMPILE_DB_DIR` | `--compiledb-dir` | String |
+| `SENTINEL_TIMEOUT` | `--timeout` | Integer (seconds) |
+| `SENTINEL_FROM` | `--from` | String (revision) |
+| `SENTINEL_UNCOMMITTED` | `--uncommitted` | `true` / `false` |
+| `SENTINEL_PATTERNS` | `--pattern` (repeated) | Comma-separated |
+| `SENTINEL_EXTENSIONS` | `--extension` (repeated) | Comma-separated |
+| `SENTINEL_GENERATOR` | `--generator` | `uniform`, `random`, `weighted` |
+| `SENTINEL_MUTANTS_PER_LINE` | `--mutants-per-line` | Integer |
+| `SENTINEL_OPERATORS` | `--operator` (repeated) | Comma-separated |
+| `SENTINEL_LIMIT` | `--limit` | Integer |
+| `SENTINEL_LCOV_TRACEFILES` | `--lcov-tracefile` (repeated) | Comma-separated |
+| `SENTINEL_CONFIG` | `--config` | String (path) |
+| `SENTINEL_CLEAN` | `--clean` | `true` / `false` |
+| `SENTINEL_DRY_RUN` | `--dry-run` | `true` / `false` |
+| `SENTINEL_VERBOSE` | `--verbose` | `true` / `false` |
+| `SENTINEL_WORKSPACE` | `--workspace` | String |
+| `SENTINEL_OUTPUT_DIR` | `--output-dir` | String |
+| `SENTINEL_PATH` | sentinel executable path | String |
 
 ## Build Results & Reporting
 
@@ -252,25 +229,15 @@ All charts are rendered using [ECharts](https://echarts.apache.org/) via the Jen
 
 ## Global Configuration
 
-In **Manage Jenkins > System**, you can set the default sentinel executable path. This is used when `sentinelPath` is not specified in the pipeline step.
+In **Manage Jenkins > System**, you can set the default sentinel executable path. This is used when neither `sentinelPath` step parameter nor `SENTINEL_PATH` environment variable is specified.
 
 ## Quality Gate
 
-When `threshold` and `thresholdAction` are set:
+When `threshold` and `thresholdAction` are set on `sentinelReport`:
 
 - If the mutation score is **below the threshold**, the build result is set to `FAILURE` or `UNSTABLE` depending on `thresholdAction`.
 - If the mutation score **meets or exceeds the threshold**, the build result is not affected.
 - If neither is set, the mutation score is reported but does not affect the build result.
-
-## Environment Variables
-
-Inside a `sentinelPipeline` closure, the following environment variables are available:
-
-| Variable | Description |
-|----------|-------------|
-| `SENTINEL_PARTITION_INDEX` | Current partition number (1-based) |
-| `SENTINEL_PARTITION_TOTAL` | Total number of partitions |
-| `SENTINEL_SEED` | Random seed shared across all partitions |
 
 ## Development
 
@@ -310,7 +277,7 @@ You can launch a local Jenkins instance with the plugin pre-installed:
 mvn hpi:run
 ```
 
-This starts Jenkins at `http://localhost:8080/jenkins/` with the plugin loaded. Create a Pipeline job to test `sentinelPipeline`, `sentinelRun`, and `sentinelMerge` steps interactively. To use a different port:
+This starts Jenkins at `http://localhost:8080/jenkins/` with the plugin loaded. Create a Pipeline job to test `sentinelRun` and `sentinelReport` steps interactively. To use a different port:
 
 ```bash
 mvn hpi:run -Dport=9090

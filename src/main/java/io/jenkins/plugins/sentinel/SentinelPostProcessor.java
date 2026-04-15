@@ -25,14 +25,6 @@ import io.jenkins.plugins.sentinel.model.SentinelResult;
 
 final class SentinelPostProcessor {
 
-    static final String PARTITION_PREFIX = ".sentinel-";
-    static final String MERGED_WORKSPACE = ".sentinel-merged";
-    static final String ENV_PARTITION_INDEX =
-            "SENTINEL_PARTITION_INDEX";
-    static final String ENV_PARTITION_TOTAL =
-            "SENTINEL_PARTITION_TOTAL";
-    static final String ENV_SEED = "SENTINEL_SEED";
-    static final String DEFAULT_SOURCE_DIR = ".";
 
     private SentinelPostProcessor() {
     }
@@ -46,7 +38,7 @@ final class SentinelPostProcessor {
     static List<String> partitionPaths(final int count) {
         final List<String> paths = new ArrayList<>();
         for (int i = 1; i <= count; i++) {
-            paths.add(PARTITION_PREFIX + i);
+            paths.add(SentinelEnvironment.partitionWorkspace(i));
         }
         return paths;
     }

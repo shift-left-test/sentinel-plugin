@@ -35,7 +35,8 @@ class SentinelCommandBuilderTest {
     @Test
     void includesPartition() {
         final SentinelConfiguration config = minimalConfig();
-        config.setPartition("2/4");
+        config.setPartitionIndex(2);
+        config.setPartitionTotal(4);
         final List<String> args = SentinelCommandBuilder.buildRunArgs(config);
         assertThat(args).contains("--partition=2/4");
     }

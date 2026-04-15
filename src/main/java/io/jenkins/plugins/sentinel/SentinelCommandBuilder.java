@@ -43,7 +43,7 @@ public final class SentinelCommandBuilder {
         addIfPresent(args, "--config", config.getConfig());
         addIfPresent(args, "--workspace", config.getWorkspace());
         addIfPresent(args, "--output-dir", config.getOutputDir());
-        addIfPresent(args, "--partition", config.getPartition());
+        addIfPresent(args, "--partition", config.getPartitionSpec());
 
         // Optional integer fields
         addIfPresent(args, "--timeout", config.getTimeout());

@@ -2,97 +2,42 @@
 <j:jelly xmlns:j="jelly:core"
          xmlns:f="/lib/form">
 
-    <!-- Required -->
-    <f:entry title="Build Command" field="buildCommand"
-             description="e.g., make all">
-        <f:textbox/>
-    </f:entry>
-    <f:entry title="Test Command" field="testCommand"
-             description="e.g., make test">
-        <f:textbox/>
-    </f:entry>
-    <f:entry title="Test Result Dir" field="testResultDir"
-             description="e.g., test-results/">
+    <f:entry title="Partition Index" field="partitionIndex">
         <f:textbox/>
     </f:entry>
 
-    <!-- Partition (manual mode) -->
-    <f:entry title="Partition" field="partition"
-             description="Which slice to run (e.g., 1/4 = first of four)">
+    <f:entry title="Build Command" field="buildCommand">
+        <f:textbox/>
+    </f:entry>
+
+    <f:entry title="Test Command" field="testCommand">
+        <f:textbox/>
+    </f:entry>
+
+    <f:entry title="Test Result Directory" field="testResultDir">
         <f:textbox/>
     </f:entry>
 
     <f:advanced>
-        <!-- Report -->
-        <f:entry title="Output Dir" field="outputDir"
-                 description="Where to write HTML reports">
-            <f:textbox/>
-        </f:entry>
-        <f:entry title="Source Dir" field="sourceDir"
-                 description="Project source root for report links (default: .)">
+        <f:entry title="Seed" field="seed">
             <f:textbox/>
         </f:entry>
 
-        <!-- Mutation scope -->
-        <f:entry title="From" field="from"
-                 description="Only mutate files changed since this revision (e.g., HEAD~1)">
+        <f:entry title="Source Directory" field="sourceDir">
             <f:textbox/>
         </f:entry>
-        <f:entry title="Uncommitted" field="uncommitted"
-                 description="Include uncommitted changes in mutation scope">
+
+        <f:entry title="Workspace" field="workspace">
+            <f:textbox/>
+        </f:entry>
+
+        <f:entry title="Verbose" field="verbose">
             <f:checkbox/>
         </f:entry>
 
-        <!-- Generation -->
-        <f:entry title="Generator" field="generator"
-                 description="uniform, random, or weighted">
+        <f:entry title="Sentinel Path" field="sentinelPath">
             <f:textbox/>
-        </f:entry>
-        <f:entry title="Mutants Per Line" field="mutantsPerLine"
-                 description="Cap on mutants generated per source line">
-            <f:number/>
-        </f:entry>
-        <f:entry title="Seed" field="seed"
-                 description="Fixed seed for reproducible runs (auto if empty)">
-            <f:number/>
-        </f:entry>
-        <f:entry title="Limit" field="limit"
-                 description="Max total mutants (0 = no limit)">
-            <f:number/>
-        </f:entry>
-
-        <!-- Other -->
-        <f:entry title="Compile DB Dir" field="compileDbDir"
-                 description="Where compile_commands.json is located">
-            <f:textbox/>
-        </f:entry>
-        <f:entry title="Timeout (sec)" field="timeout"
-                 description="Kill test if it exceeds this duration">
-            <f:number/>
-        </f:entry>
-        <f:entry title="Config File" field="config"
-                 description="Path to sentinel.yaml">
-            <f:textbox/>
-        </f:entry>
-        <f:entry title="Workspace" field="workspace"
-                 description="Working directory for sentinel">
-            <f:textbox/>
-        </f:entry>
-        <f:entry title="Program Path" field="sentinelPath"
-                 description="Override global setting">
-            <f:textbox/>
-        </f:entry>
-        <f:entry title="Clean" field="clean"
-                 description="Remove previous sentinel workspace before run">
-            <f:checkbox/>
-        </f:entry>
-        <f:entry title="Dry Run" field="dryRun"
-                 description="Generate mutants only, skip evaluation">
-            <f:checkbox/>
-        </f:entry>
-        <f:entry title="Verbose" field="verbose"
-                 description="Print detailed sentinel output">
-            <f:checkbox/>
         </f:entry>
     </f:advanced>
+
 </j:jelly>

@@ -1,0 +1,27 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core"
+         xmlns:f="/lib/form">
+
+    <f:entry title="Threshold (%)" field="threshold">
+        <f:textbox/>
+    </f:entry>
+
+    <f:entry title="Threshold Action" field="thresholdAction">
+        <f:select/>
+    </f:entry>
+
+    <f:advanced>
+        <f:entry title="Source Directory" field="sourceDir">
+            <f:textbox/>
+        </f:entry>
+
+        <f:entry title="Output Directory" field="outputDir">
+            <f:textbox/>
+        </f:entry>
+
+        <f:entry title="Sentinel Path" field="sentinelPath">
+            <f:textbox/>
+        </f:entry>
+    </f:advanced>
+
+</j:jelly>

@@ -2,11 +2,10 @@
 
 ## Project Overview
 
-A Jenkins Pipeline plugin that parallelizes [sentinel](https://github.com/shift-left-test/sentinel) mutation testing across multiple nodes using `--partition` and `--merge-partition`, reducing overall execution time by ~1/N.
+A Jenkins Pipeline plugin for [sentinel](https://github.com/shift-left-test/sentinel) mutation testing. Provides two composable pipeline steps (`sentinelRun` + `sentinelReport`) that users combine with standard Jenkins Declarative Pipeline constructs for distributed execution.
 
 - **Pipeline-only** (no Freestyle support)
-- **API style**: `script { }` + closure (industry standard for distributed Jenkins plugins)
-- **Design spec**: `docs/superpowers/specs/2026-04-12-sentinel-plugin-design.md`
+- **API style**: Composable steps with `SENTINEL_*` environment variable configuration
 
 ## Tech Stack
 
@@ -19,21 +18,22 @@ A Jenkins Pipeline plugin that parallelizes [sentinel](https://github.com/shift-
 
 ## Architecture
 
-Three Pipeline steps:
+Two composable Pipeline steps:
 
-- **`sentinelPipeline`** — Main orchestrator. Takes a closure that runs on each partition node. Handles parallel execution, stash/unstash, merge, report generation, and threshold judgment.
-- **`sentinelRun`** — Runs sentinel on a single partition. Used inside `sentinelPipeline` closure (auto-injected config) or standalone (manual mode).
-- **`sentinelMerge`** — Merges partition results manually. For advanced use cases only.
+- **`sentinelRun`** — Runs sentinel. Reads config from `SENTINEL_*` env vars, step params override. Auto-stashes results for `sentinelReport`. Accepts `partitionIndex` for distributed execution.
+- **`sentinelReport`** — Unstashes results, merges partitions (if `SENTINEL_PARTITION_TOTAL` set), generates reports, parses `mutations.xml`, attaches build action, applies threshold judgment.
 
 ### Key Design Decisions
 
+- **Composable steps, not orchestrator**: Users compose `sentinelRun` + `sentinelReport` with standard Jenkins `parallel`, `node`, `agent` directives. No closure-based orchestration.
+- **Environment variable configuration**: All sentinel CLI options configurable via `SENTINEL_*` env vars in Declarative Pipeline `environment {}` block. Step params override env vars.
 - **Merge and report are separate sentinel commands**: `--merge-partition` only merges and exits; `--output-dir` runs separately for report generation.
 - **Plugin owns threshold judgment**: Never pass `--threshold` to sentinel. Plugin parses `mutations.xml` and sets build result to FAILURE/UNSTABLE.
-- **Source code required on merge node**: HTML reports embed source code. User must `checkout scm` before `sentinelPipeline`.
-- **Partition node allocation**: Plugin wraps each closure in `node(nodeLabel) { ... }` internally.
+- **Source code required on report node**: HTML reports embed source code. User must `checkout scm` before `sentinelReport`.
 - **Result parsing**: Parse `mutations.xml` (PITest-compatible XML) from `--output-dir` output. Never parse stdout or workspace internals.
-- **stash/unstash** for partition result collection (no hard size limit).
+- **stash/unstash handled by plugin**: `sentinelRun` auto-stashes, `sentinelReport` auto-unstashes. Users don't manage stash names.
 - **Workspace path separation**: Plugin auto-assigns unique workspace paths per partition (`.sentinel-1`, `.sentinel-2`, ...).
+- **partitionIndex is a step param, not env var**: Each parallel stage specifies its own `partitionIndex`. `SENTINEL_PARTITION_TOTAL` is shared via env var.
 
 ## Build & Test
 
@@ -89,11 +89,12 @@ All integrated via `static-analysis` Maven profile:
 ```
 io.jenkins.plugins.sentinel
 ├── SentinelGlobalConfiguration    # Global config (sentinel path)
-├── SentinelPipelineStep           # sentinelPipeline step
-├── SentinelRunStep                # sentinelRun step
-├── SentinelMergeStep              # sentinelMerge step
-├── SentinelOrchestrator           # Parallel dispatch, collect, merge, report
+├── SentinelRunStep                # sentinelRun step (env var config, auto-stash)
+├── SentinelReportStep             # sentinelReport step (unstash, merge, report, threshold)
+├── SentinelEnvironment            # SENTINEL_* env var mapping, naming conventions
 ├── SentinelCommandBuilder         # Builds sentinel CLI commands
+├── SentinelRunner                 # Executes sentinel CLI via Jenkins launcher
+├── SentinelPostProcessor          # Merge, report generation, threshold judgment
 ├── SentinelResultParser           # Parses mutations.xml
 ├── SentinelBuildAction            # Build page: summary widget, report page (RunAction2)
 ├── SentinelProjectAction          # Project page: mutation score trend chart
@@ -111,7 +112,7 @@ io.jenkins.plugins.sentinel
 ## Jenkins Plugin Patterns
 
 - All step/model classes must be `Serializable` (CPS pipeline requirement)
-- `@DataBoundConstructor` for required fields, `@DataBoundSetter` for optional
+- `@DataBoundConstructor` with no-arg constructor, `@DataBoundSetter` for all optional fields (env vars provide defaults)
 - `load()` in GlobalConfiguration constructor is standard Jenkins pattern (SpotBugs excluded)
 - Jelly templates use `escape-by-default='true'` for XSS protection
 - `listener.getLogger()` is standard Jenkins logging pattern
@@ -127,9 +128,9 @@ io.jenkins.plugins.sentinel
 
 ## Key Semantics
 
-- `SentinelRunStep.partition`: string `"1/4"` format (partition index/total)
-- `SentinelMergeStep.partitions`: `List<String>` of workspace paths (`.sentinel-1`, `.sentinel-2`)
-- `SentinelPipelineStep.partitions`: `int` count (auto-assigns paths internally)
+- `SentinelRunStep.partitionIndex`: Integer (1-based). Combined with `SENTINEL_PARTITION_TOTAL` env var to form `--partition index/total`.
+- `SentinelConfiguration.getPartitionSpec()`: derives `"index/total"` string from `partitionIndex` + `partitionTotal`.
+- `SentinelEnvironment`: single source of truth for env var names, stash names, workspace paths.
 - MutationScore formula: `killed / (killed + survived) * 100` (skipped excluded from denominator)
 - Threshold is optional; if set, `thresholdAction` is required (paired validation)
 
@@ -142,7 +143,11 @@ io.jenkins.plugins.sentinel
 ## Workflow Rules
 
 - Always summarize what you plan to implement and get approval before writing code.
-- All sentinel CLI options must be configurable via plugin parameters (see design spec Section 4).
+- All sentinel CLI options must be configurable via `SENTINEL_*` env vars and step parameters.
 - Never pass `--threshold` to sentinel — plugin handles threshold judgment from mutations.xml.
-- Merge node = pipeline's current agent. Partition nodes = allocated via `nodeLabel`.
-- After implementing or modifying code, always run the `simplify` skill to review, then run static analysis (`mvn clean verify -Pstatic-analysis`) and fix all issues before considering the task complete.
+- Report node = pipeline's current agent. Partition nodes = allocated by user via standard Jenkins `agent`/`node` directives.
+- When writing new code or modifying existing code:
+  1. Write test code first (TDD), then implement the feature.
+  2. Run the `simplify` skill for code review.
+  3. Run all static analysis including Javadoc (`mvn clean verify -Pstatic-analysis`) and fix all issues.
+  4. Update `README.md` to reflect any user-facing changes.

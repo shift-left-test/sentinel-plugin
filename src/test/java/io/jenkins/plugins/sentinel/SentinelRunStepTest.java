@@ -7,6 +7,7 @@ package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
@@ -16,145 +17,167 @@ class SentinelRunStepTest {
 
     private static final String BUILD_CMD = "make all";
     private static final String TEST_CMD = "make test";
-    private static final String TEST_RESULT = "test-results/";
-    private static final String ENV_INDEX =
-            "SENTINEL_PARTITION_INDEX";
-    private static final String ENV_TOTAL =
+    private static final String ENV_PARTITION_TOTAL =
             "SENTINEL_PARTITION_TOTAL";
-    private static final String ENV_SEED = "SENTINEL_SEED";
+    private static final String TEST_RESULT = "test-results/";
     private static final long SEED_VALUE = 12_345L;
 
     @Test
-    void defaultValuesAreSet() {
-        final SentinelRunStep step = new SentinelRunStep(
-                BUILD_CMD, TEST_CMD, TEST_RESULT);
-        assertThat(step.getBuildCommand()).isEqualTo(BUILD_CMD);
-        assertThat(step.getTestCommand()).isEqualTo(TEST_CMD);
-        assertThat(step.getTestResultDir()).isEqualTo(TEST_RESULT);
-        assertThat(step.getPartition()).isNull();
+    void noRequiredConstructorParams() {
+        final SentinelRunStep step = new SentinelRunStep();
+        assertThat(step.getBuildCommand()).isNull();
+        assertThat(step.getTestCommand()).isNull();
+        assertThat(step.getTestResultDir()).isNull();
+        assertThat(step.getPartitionIndex()).isNull();
         assertThat(step.getSeed()).isNull();
-        assertThat(step.isVerbose()).isFalse();
-        assertThat(step.isClean()).isFalse();
+        assertThat(step.isVerbose()).isNull();
+        assertThat(step.getWorkspace()).isNull();
+        assertThat(step.getSourceDir()).isNull();
+        assertThat(step.getSentinelPath()).isNull();
     }
 
     @Test
-    void settersUpdateValues() {
-        final SentinelRunStep step = new SentinelRunStep(
-                BUILD_CMD, TEST_CMD, TEST_RESULT);
-        step.setPartition("2/4");
-        step.setSeed(12_345L);
-        step.setVerbose(true);
-        step.setSourceDir("src");
-        step.setWorkspace(".sentinel-2");
-        assertThat(step.getPartition()).isEqualTo("2/4");
-        assertThat(step.getSeed()).isEqualTo(12_345L);
-        assertThat(step.isVerbose()).isTrue();
-        assertThat(step.getSourceDir()).isEqualTo("src");
-        assertThat(step.getWorkspace()).isEqualTo(".sentinel-2");
+    void partitionIndexSetter() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionIndex(3);
+        assertThat(step.getPartitionIndex()).isEqualTo(3);
     }
 
     @Test
-    void toConfigurationMapsAllFields() {
-        final SentinelRunStep step = new SentinelRunStep(
-                BUILD_CMD, TEST_CMD, TEST_RESULT);
-        step.setPartition("1/4");
+    void allStepParamsOverrideEnvVars() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setBuildCommand("step-build");
+        step.setTestCommand("step-test");
+        step.setTestResultDir("step-results/");
+        step.setSourceDir("step-src");
         step.setSeed(99L);
-        step.setFrom("HEAD~1");
         step.setVerbose(true);
+        step.setWorkspace(".my-ws");
+        step.setSentinelPath("/opt/sentinel");
 
-        final SentinelConfiguration config = step.toConfiguration();
-        assertThat(config.getBuildCommand()).isEqualTo(BUILD_CMD);
-        assertThat(config.getTestCommand()).isEqualTo(TEST_CMD);
-        assertThat(config.getTestResultDir()).isEqualTo(TEST_RESULT);
-        assertThat(config.getPartition()).isEqualTo("1/4");
-        assertThat(config.getSeed()).isEqualTo(99L);
-        assertThat(config.getFrom()).isEqualTo("HEAD~1");
-        assertThat(config.isVerbose()).isTrue();
-    }
-
-    @Test
-    void toConfigurationAutoDetectsPartitionFromEnvVars() {
-        final SentinelRunStep step = new SentinelRunStep(
-                BUILD_CMD, TEST_CMD, TEST_RESULT);
-
-        final Map<String, String> env = Map.of(
-                ENV_INDEX, "2",
-                ENV_TOTAL, "4");
+        final Map<String, String> env = new HashMap<>();
+        env.put("SENTINEL_BUILD_COMMAND", "env-build");
+        env.put("SENTINEL_TEST_COMMAND", "env-test");
+        env.put("SENTINEL_TEST_RESULT_DIR", "env-results/");
+        env.put("SENTINEL_SOURCE_DIR", "env-src");
+        env.put("SENTINEL_SEED", "111");
+        env.put("SENTINEL_VERBOSE", "false");
+        env.put("SENTINEL_WORKSPACE", ".env-ws");
+        env.put("SENTINEL_PATH", "/usr/bin/sentinel");
 
         final SentinelConfiguration config =
                 step.toConfiguration(env);
-        assertThat(config.getPartition()).isEqualTo("2/4");
+        assertThat(config.getBuildCommand())
+                .isEqualTo("step-build");
+        assertThat(config.getTestCommand())
+                .isEqualTo("step-test");
+        assertThat(config.getTestResultDir())
+                .isEqualTo("step-results/");
+        assertThat(config.getSourceDir())
+                .isEqualTo("step-src");
+        assertThat(config.getSeed()).isEqualTo(99L);
+        assertThat(config.isVerbose()).isTrue();
+        assertThat(config.getWorkspace()).isEqualTo(".my-ws");
+        assertThat(config.getSentinelPath())
+                .isEqualTo("/opt/sentinel");
     }
 
     @Test
-    void toConfigurationAutoDetectsWorkspaceFromEnvVars() {
-        final SentinelRunStep step = new SentinelRunStep(
-                BUILD_CMD, TEST_CMD, TEST_RESULT);
+    void toConfigurationReadsFromEnvVars() {
+        final SentinelRunStep step = new SentinelRunStep();
 
-        final Map<String, String> env = Map.of(
-                ENV_INDEX, "3",
-                ENV_TOTAL, "4");
+        final Map<String, String> env = new HashMap<>();
+        env.put("SENTINEL_BUILD_COMMAND", BUILD_CMD);
+        env.put("SENTINEL_TEST_COMMAND", TEST_CMD);
+        env.put("SENTINEL_TEST_RESULT_DIR", TEST_RESULT);
+        env.put("SENTINEL_SOURCE_DIR", "src");
+        env.put("SENTINEL_SEED", String.valueOf(SEED_VALUE));
+        env.put(ENV_PARTITION_TOTAL, "4");
+
+        final SentinelConfiguration config =
+                step.toConfiguration(env);
+        assertThat(config.getBuildCommand()).isEqualTo(BUILD_CMD);
+        assertThat(config.getTestCommand()).isEqualTo(TEST_CMD);
+        assertThat(config.getTestResultDir())
+                .isEqualTo(TEST_RESULT);
+        assertThat(config.getSourceDir()).isEqualTo("src");
+        assertThat(config.getSeed()).isEqualTo(SEED_VALUE);
+        assertThat(config.getPartitionTotal()).isEqualTo(4);
+    }
+
+    @Test
+    void toConfigurationStepParamsOverrideEnvVars() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setBuildCommand("override-build");
+        step.setSeed(99L);
+
+        final Map<String, String> env = new HashMap<>();
+        env.put("SENTINEL_BUILD_COMMAND", BUILD_CMD);
+        env.put("SENTINEL_SEED", String.valueOf(SEED_VALUE));
+
+        final SentinelConfiguration config =
+                step.toConfiguration(env);
+        assertThat(config.getBuildCommand())
+                .isEqualTo("override-build");
+        assertThat(config.getSeed()).isEqualTo(99L);
+    }
+
+    @Test
+    void partitionIndexAutoAssignsWorkspace() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionIndex(3);
+
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_PARTITION_TOTAL, "4");
 
         final SentinelConfiguration config =
                 step.toConfiguration(env);
         assertThat(config.getWorkspace()).isEqualTo(".sentinel-3");
+        assertThat(config.getPartitionIndex()).isEqualTo(3);
+        assertThat(config.getPartitionTotal()).isEqualTo(4);
+        assertThat(config.getPartitionSpec()).isEqualTo("3/4");
     }
 
     @Test
-    void toConfigurationExplicitPartitionOverridesEnvVars() {
-        final SentinelRunStep step = new SentinelRunStep(
-                BUILD_CMD, TEST_CMD, TEST_RESULT);
-        step.setPartition("1/2");
-        step.setWorkspace(".my-workspace");
+    void partitionIndexFromStepOverridesDefault() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionIndex(1);
 
-        final Map<String, String> env = Map.of(
-                ENV_INDEX, "3",
-                ENV_TOTAL, "4");
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_PARTITION_TOTAL, "4");
 
         final SentinelConfiguration config =
                 step.toConfiguration(env);
-        assertThat(config.getPartition()).isEqualTo("1/2");
-        assertThat(config.getWorkspace()).isEqualTo(".my-workspace");
+        assertThat(config.getPartitionIndex()).isEqualTo(1);
+        assertThat(config.getPartitionSpec()).isEqualTo("1/4");
+        assertThat(config.getWorkspace()).isEqualTo(".sentinel-1");
     }
 
     @Test
-    void toConfigurationNoEnvVarsLeavesPartitionNull() {
-        final SentinelRunStep step = new SentinelRunStep(
-                BUILD_CMD, TEST_CMD, TEST_RESULT);
+    void explicitWorkspaceOverridesAutoAssignment() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionIndex(2);
+        step.setWorkspace(".custom-ws");
 
-        final Map<String, String> env = Map.of();
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_PARTITION_TOTAL, "4");
 
         final SentinelConfiguration config =
                 step.toConfiguration(env);
-        assertThat(config.getPartition()).isNull();
+        assertThat(config.getWorkspace()).isEqualTo(".custom-ws");
     }
 
     @Test
-    void toConfigurationAutoDetectsSeedFromEnvVar() {
-        final SentinelRunStep step = new SentinelRunStep(
-                BUILD_CMD, TEST_CMD, TEST_RESULT);
-
-        final Map<String, String> env = Map.of(
-                ENV_INDEX, "1",
-                ENV_TOTAL, "2",
-                ENV_SEED, String.valueOf(SEED_VALUE));
+    void toConfigurationWithoutEnvVarsLeavesFieldsNull() {
+        final SentinelRunStep step = new SentinelRunStep();
 
         final SentinelConfiguration config =
-                step.toConfiguration(env);
-        assertThat(config.getSeed()).isEqualTo(SEED_VALUE);
-    }
-
-    @Test
-    void toConfigurationExplicitSeedOverridesEnvVar() {
-        final SentinelRunStep step = new SentinelRunStep(
-                BUILD_CMD, TEST_CMD, TEST_RESULT);
-        step.setSeed(99L);
-
-        final Map<String, String> env = Map.of(
-                ENV_SEED, String.valueOf(SEED_VALUE));
-
-        final SentinelConfiguration config =
-                step.toConfiguration(env);
-        assertThat(config.getSeed()).isEqualTo(99L);
+                step.toConfiguration(Map.of());
+        assertThat(config.getBuildCommand()).isNull();
+        assertThat(config.getTestCommand()).isNull();
+        assertThat(config.getTestResultDir()).isNull();
+        assertThat(config.getPartitionIndex()).isNull();
+        assertThat(config.getSeed()).isNull();
+        assertThat(config.getWorkspace()).isNull();
     }
 }

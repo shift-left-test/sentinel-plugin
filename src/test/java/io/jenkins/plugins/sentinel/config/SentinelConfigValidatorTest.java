@@ -60,23 +60,52 @@ class SentinelConfigValidatorTest {
     }
 
     @Test
-    void negativePartitionsThrows() {
+    void validConfigWithPartitionIndexPasses() {
         final SentinelConfiguration config = minimalConfig();
-        config.setPartitions(-1);
-        assertThatThrownBy(
-                () -> SentinelConfigValidator.validate(config))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("partitions");
+        config.setPartitionIndex(2);
+        config.setPartitionTotal(4);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getPartitionIndex()).isEqualTo(2);
     }
 
     @Test
-    void zeroPartitionsThrows() {
+    void partitionIndexZeroThrows() {
         final SentinelConfiguration config = minimalConfig();
-        config.setPartitions(0);
+        config.setPartitionIndex(0);
+        config.setPartitionTotal(4);
         assertThatThrownBy(
                 () -> SentinelConfigValidator.validate(config))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("partitions");
+                .hasMessageContaining("partitionIndex");
+    }
+
+    @Test
+    void partitionIndexExceedsTotalThrows() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setPartitionIndex(5);
+        config.setPartitionTotal(4);
+        assertThatThrownBy(
+                () -> SentinelConfigValidator.validate(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("partitionIndex");
+    }
+
+    @Test
+    void partitionIndexWithoutTotalThrows() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setPartitionIndex(1);
+        assertThatThrownBy(
+                () -> SentinelConfigValidator.validate(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("partitionTotal");
+    }
+
+    @Test
+    void partitionTotalWithoutIndexIsValid() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setPartitionTotal(4);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getPartitionTotal()).isEqualTo(4);
     }
 
     @Test
