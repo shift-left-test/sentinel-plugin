@@ -6,7 +6,13 @@
 package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import hudson.EnvVars;
@@ -15,7 +21,12 @@ import hudson.Launcher;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.util.ListBoxModel;
+import org.jenkinsci.plugins.workflow.flow.StashManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 class SentinelReportStepTest {
 
@@ -107,5 +118,41 @@ class SentinelReportStepTest {
                 descriptor.doFillThresholdActionItems();
         assertThat(items).hasSizeGreaterThanOrEqualTo(3);
         assertThat(items.get(0).value).isEmpty();
+    }
+
+    @Test
+    void unstashPartitionsTargetsPartitionSubdirectories(
+            @TempDir final Path tempDir) throws Exception {
+        final Run<?, ?> build = mock(Run.class);
+        final Launcher launcher = mock(Launcher.class);
+        final TaskListener listener = mock(TaskListener.class);
+        final EnvVars env = new EnvVars();
+        when(listener.getLogger())
+                .thenReturn(System.out);
+
+        final FilePath ws = new FilePath(tempDir.toFile());
+        final List<String> targetPaths = new ArrayList<>();
+
+        try (MockedStatic<StashManager> mocked =
+                     Mockito.mockStatic(StashManager.class)) {
+            mocked.when(() -> StashManager.unstash(
+                    any(), ArgumentMatchers.anyString(),
+                    any(FilePath.class),
+                    any(), any(), any()))
+                    .thenAnswer(invocation -> {
+                        final FilePath target =
+                                invocation.getArgument(2);
+                        targetPaths.add(target.getRemote());
+                        return null;
+                    });
+
+            SentinelReportStep.unstashPartitions(
+                    build, ws, launcher, env, listener, 3);
+        }
+
+        assertThat(targetPaths).containsExactly(
+                ws.child(".sentinel-1").getRemote(),
+                ws.child(".sentinel-2").getRemote(),
+                ws.child(".sentinel-3").getRemote());
     }
 }

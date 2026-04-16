@@ -52,6 +52,37 @@ public class SentinelReportStep extends Step implements Serializable {
     private String sentinelPath;
 
     /**
+     * Unstashes all partition results into their respective
+     * partition subdirectories.
+     *
+     * @param build   current build
+     * @param ws      workspace root
+     * @param launcher launcher
+     * @param env     environment variables
+     * @param listener build listener
+     * @param total   total number of partitions
+     * @throws Exception if unstash fails
+     */
+    static void unstashPartitions(
+            final Run<?, ?> build,
+            final FilePath ws,
+            final Launcher launcher,
+            final EnvVars env,
+            final TaskListener listener,
+            final int total) throws Exception {
+        for (int i = 1; i <= total; i++) {
+            final String name =
+                    SentinelEnvironment.stashName(i);
+            listener.getLogger().printf(
+                    "[Sentinel] Unstashing %s%n", name);
+            StashManager.unstash(build, name,
+                    ws.child(SentinelEnvironment
+                            .partitionWorkspace(i)),
+                    launcher, env, listener);
+        }
+    }
+
+    /**
      * Creates a new SentinelReportStep with no required parameters.
      */
     @DataBoundConstructor
@@ -220,23 +251,6 @@ public class SentinelReportStep extends Step implements Serializable {
                 return Integer.parseInt(envTotal);
             }
             return 0;
-        }
-
-        private void unstashPartitions(
-                final Run<?, ?> build,
-                final FilePath ws,
-                final Launcher launcher,
-                final EnvVars env,
-                final TaskListener listener,
-                final int total) throws Exception {
-            for (int i = 1; i <= total; i++) {
-                final String name =
-                        SentinelEnvironment.stashName(i);
-                listener.getLogger().printf(
-                        "[Sentinel] Unstashing %s%n", name);
-                StashManager.unstash(build, name, ws,
-                        launcher, env, listener);
-            }
         }
 
         private void unstashSingle(
