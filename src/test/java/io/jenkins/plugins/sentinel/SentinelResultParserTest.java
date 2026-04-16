@@ -9,15 +9,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 
 import io.jenkins.plugins.sentinel.model.FileMutationResult;
 import io.jenkins.plugins.sentinel.model.SentinelResult;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 class SentinelResultParserTest {
 
@@ -60,43 +59,37 @@ class SentinelResultParserTest {
     }
 
     @Test
-    void parsesEmptyMutationsXml(@TempDir final Path tempDir)
-            throws Exception {
-        final Path xml = tempDir.resolve("mutations.xml");
-        Files.writeString(xml, """
+    void parsesEmptyMutationsXml() throws Exception {
+        final String xml = """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <mutations>
                 </mutations>
-                """);
-        final SentinelResult result = SentinelResultParser.parse(xml);
-        assertThat(result.overallScore().total()).isEqualTo(0);
-        assertThat(result.fileResults()).isEmpty();
-        assertThat(result.entries()).isEmpty();
+                """;
+        try (InputStream in = new ByteArrayInputStream(
+                xml.getBytes(StandardCharsets.UTF_8))) {
+            final SentinelResult result =
+                    SentinelResultParser.parse(in);
+            assertThat(result.overallScore().total()).isEqualTo(0);
+            assertThat(result.fileResults()).isEmpty();
+            assertThat(result.entries()).isEmpty();
+        }
     }
 
     @Test
-    void throwsOnMissingFile(@TempDir final Path tempDir) {
-        final Path missing = tempDir.resolve("nonexistent.xml");
+    void throwsOnInvalidXml() {
+        final InputStream badInput = new ByteArrayInputStream(
+                "not xml".getBytes(StandardCharsets.UTF_8));
         assertThatThrownBy(
-                () -> SentinelResultParser.parse(missing))
+                () -> SentinelResultParser.parse(badInput))
                 .isInstanceOf(IOException.class);
     }
 
     private SentinelResult parseResource(final String name)
             throws Exception {
-        try (InputStream is = Thread.currentThread()
+        try (InputStream in = Thread.currentThread()
                 .getContextClassLoader()
                 .getResourceAsStream(name)) {
-            final Path tempFile = Files.createTempFile(
-                    "mutations-", ".xml");
-            Files.copy(is, tempFile,
-                    java.nio.file.StandardCopyOption
-                            .REPLACE_EXISTING);
-            try {
-                return SentinelResultParser.parse(tempFile);
-            } finally {
-                Files.deleteIfExists(tempFile);
-            }
+            return SentinelResultParser.parse(in);
         }
     }
 }

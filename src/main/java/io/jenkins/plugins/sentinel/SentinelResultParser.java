@@ -6,7 +6,7 @@
 package io.jenkins.plugins.sentinel;
 
 import java.io.IOException;
-import java.nio.file.Path;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,15 +43,15 @@ public final class SentinelResultParser {
     }
 
     /**
-     * Parses a mutations.xml file into a SentinelResult.
+     * Parses a mutations.xml stream into a SentinelResult.
      *
-     * @param xmlPath path to mutations.xml
+     * @param input input stream of mutations.xml content
      * @return parsed result
-     * @throws IOException if file cannot be read or parsed
+     * @throws IOException if stream cannot be read or parsed
      */
-    public static SentinelResult parse(final Path xmlPath)
+    public static SentinelResult parse(final InputStream input)
             throws IOException {
-        final Document doc = parseDocument(xmlPath);
+        final Document doc = parseDocument(input);
         final NodeList mutationNodes =
                 doc.getElementsByTagName("mutation");
 
@@ -139,7 +139,7 @@ public final class SentinelResultParser {
         }
     }
 
-    private static Document parseDocument(final Path xmlPath)
+    private static Document parseDocument(final InputStream input)
             throws IOException {
         try {
             final DocumentBuilderFactory factory =
@@ -151,12 +151,11 @@ public final class SentinelResultParser {
                     true);
             final DocumentBuilder builder =
                     factory.newDocumentBuilder();
-            return builder.parse(xmlPath.toFile());
+            return builder.parse(input);
         } catch (ParserConfigurationException
                  | SAXException e) {
             throw new IOException(
-                    "Failed to parse mutations.xml: "
-                            + xmlPath, e);
+                    "Failed to parse mutations.xml", e);
         }
     }
 

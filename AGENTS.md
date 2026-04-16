@@ -147,7 +147,6 @@ io.jenkins.plugins.sentinel
 - Never pass `--threshold` to sentinel — plugin handles threshold judgment from mutations.xml.
 - Report node = pipeline's current agent. Partition nodes = allocated by user via standard Jenkins `agent`/`node` directives.
 - When writing new code or modifying existing code:
-  1. Write test code first (TDD), then implement the feature.
-  2. Run the `simplify` skill for code review.
-  3. Run all static analysis including Javadoc (`mvn clean verify -Pstatic-analysis`) and fix all issues.
-  4. Update `README.md` to reflect any user-facing changes.
+  1. Run the `simplify` skill for code review.
+  2. Run all static analysis including Javadoc (`mvn clean verify -Pstatic-analysis`) and fix all issues.
+  3. Update `README.md` to reflect any user-facing changes.

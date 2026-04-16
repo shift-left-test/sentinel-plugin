@@ -5,7 +5,7 @@
 
 package io.jenkins.plugins.sentinel;
 
-import java.nio.file.Path;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -142,10 +142,12 @@ final class SentinelPostProcessor {
                 sentinelCmd, workspace, sourceDir, outputDir);
         SentinelRunner.run(reportArgs, env, ws, launcher, listener);
 
-        final Path xmlPath = Path.of(
-                ws.getRemote(), outputDir, "mutations.xml");
-        final SentinelResult result =
-                SentinelResultParser.parse(xmlPath);
+        final FilePath xmlFile =
+                ws.child(outputDir).child("mutations.xml");
+        final SentinelResult result;
+        try (InputStream in = xmlFile.read()) {
+            result = SentinelResultParser.parse(in);
+        }
 
         final SentinelBuildAction action =
                 new SentinelBuildAction(result);
