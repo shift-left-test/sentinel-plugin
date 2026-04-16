@@ -177,6 +177,128 @@ class SentinelConfigValidatorTest {
                 .hasMessageContaining("partitionIndex");
     }
 
+    @Test
+    void negativeSeedThrows() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setSeed(-1L);
+        assertThatThrownBy(
+                () -> SentinelConfigValidator.validate(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("seed");
+    }
+
+    @Test
+    void seedExceedsUnsignedIntMaxThrows() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setSeed(4_294_967_296L);
+        assertThatThrownBy(
+                () -> SentinelConfigValidator.validate(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("seed");
+    }
+
+    @Test
+    void seedAtUnsignedIntMaxPasses() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setSeed(4_294_967_295L);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getSeed()).isEqualTo(4_294_967_295L);
+    }
+
+    @Test
+    void seedZeroPasses() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setSeed(0L);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getSeed()).isEqualTo(0L);
+    }
+
+    @Test
+    void nullSeedPasses() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setSeed(null);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getSeed()).isNull();
+    }
+
+    @Test
+    void negativeTimeoutThrows() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setTimeout(-1);
+        assertThatThrownBy(
+                () -> SentinelConfigValidator.validate(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("timeout");
+    }
+
+    @Test
+    void timeoutZeroPasses() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setTimeout(0);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getTimeout()).isEqualTo(0);
+    }
+
+    @Test
+    void nullTimeoutPasses() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setTimeout(null);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getTimeout()).isNull();
+    }
+
+    @Test
+    void negativeMutantsPerLineThrows() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setMutantsPerLine(-1);
+        assertThatThrownBy(
+                () -> SentinelConfigValidator.validate(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mutantsPerLine");
+    }
+
+    @Test
+    void mutantsPerLineZeroPasses() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setMutantsPerLine(0);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getMutantsPerLine()).isEqualTo(0);
+    }
+
+    @Test
+    void nullMutantsPerLinePasses() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setMutantsPerLine(null);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getMutantsPerLine()).isNull();
+    }
+
+    @Test
+    void negativeLimitThrows() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setLimit(-1);
+        assertThatThrownBy(
+                () -> SentinelConfigValidator.validate(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("limit");
+    }
+
+    @Test
+    void limitZeroPasses() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setLimit(0);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getLimit()).isEqualTo(0);
+    }
+
+    @Test
+    void nullLimitPasses() {
+        final SentinelConfiguration config = minimalConfig();
+        config.setLimit(null);
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getLimit()).isNull();
+    }
+
     private SentinelConfiguration minimalConfig() {
         final SentinelConfiguration config = new SentinelConfiguration();
         config.setBuildCommand("make all");

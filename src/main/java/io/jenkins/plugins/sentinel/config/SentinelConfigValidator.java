@@ -12,6 +12,7 @@ package io.jenkins.plugins.sentinel.config;
 public final class SentinelConfigValidator {
 
     private static final double MAX_THRESHOLD = 100.0;
+    private static final long MAX_UNSIGNED_INT = 4_294_967_295L;
 
     private SentinelConfigValidator() {
     }
@@ -24,6 +25,11 @@ public final class SentinelConfigValidator {
      * @throws IllegalArgumentException if validation fails
      */
     public static void validate(final SentinelConfiguration config) {
+        validateNonNegative(config.getTimeout(), "timeout");
+        validateNonNegative(config.getMutantsPerLine(), "mutantsPerLine");
+        validateNonNegative(config.getLimit(), "limit");
+        validateSeed(config.getSeed());
+
         if (config.getPartitionIndex() != null) {
             if (config.getPartitionTotal() == null) {
                 throw new IllegalArgumentException(
@@ -49,6 +55,22 @@ public final class SentinelConfigValidator {
                 throw new IllegalArgumentException(
                         "thresholdAction is required when threshold is set");
             }
+        }
+    }
+
+    private static void validateNonNegative(final Integer value,
+                                            final String name) {
+        if (value != null && value < 0) {
+            throw new IllegalArgumentException(
+                    name + " must not be negative, got: " + value);
+        }
+    }
+
+    private static void validateSeed(final Long seed) {
+        if (seed != null && (seed < 0 || seed > MAX_UNSIGNED_INT)) {
+            throw new IllegalArgumentException(
+                    "seed must be between 0 and "
+                            + MAX_UNSIGNED_INT + ", got: " + seed);
         }
     }
 }
