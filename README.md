@@ -119,6 +119,7 @@ pipeline {
 - Shared configuration lives in the `environment` block — all stages inherit it.
 - Each partition stage only differs by `partitionIndex`.
 - `sentinelRun` automatically stashes results; `sentinelReport` automatically unstashes, merges, generates reports, and applies threshold judgment.
+- The plugin clears its own default/auto-managed sentinel directories before reusing them (`.sentinel_workspace`, `.sentinel-N`, `.sentinel-merged`, default `sentinel-report`), but does not delete user-specified workspace or output paths.
 - The Report stage needs `checkout scm` because HTML reports embed source code.
 - All partitions must share the same `SENTINEL_SEED` for merge to work.
 
@@ -181,6 +182,7 @@ Collects results, merges partitions, generates reports, and applies threshold ju
 **Behavior:**
 - If `SENTINEL_PARTITION_TOTAL` is set: unstashes all partition results, runs `sentinel --merge-partition`, then generates reports.
 - If not set: unstashes a single result and generates reports directly.
+- Before unstash/merge/report, the plugin recreates only its default or auto-assigned working directories to avoid stale files from earlier builds.
 - Threshold judgment: if score < threshold, sets build result to `FAILURE` or `UNSTABLE`.
 
 ## Environment Variables

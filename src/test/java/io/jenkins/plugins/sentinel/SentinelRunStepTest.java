@@ -6,7 +6,10 @@
 package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -18,6 +21,7 @@ import hudson.model.Run;
 import hudson.model.TaskListener;
 import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class SentinelRunStepTest {
 
@@ -27,6 +31,9 @@ class SentinelRunStepTest {
             "SENTINEL_PARTITION_TOTAL";
     private static final String TEST_RESULT = "test-results/";
     private static final long SEED_VALUE = 12_345L;
+    private static final String CUSTOM_WORKSPACE = "custom-ws";
+    private static final String STALE_FILE = "stale.txt";
+    private static final String UTF_8 = "UTF-8";
 
     @Test
     void noRequiredConstructorParams() {
@@ -185,6 +192,81 @@ class SentinelRunStepTest {
         assertThat(config.getPartitionIndex()).isNull();
         assertThat(config.getSeed()).isNull();
         assertThat(config.getWorkspace()).isNull();
+    }
+
+    @Test
+    void managedWorkspaceForCleanupUsesDefaultSingleWorkspace() {
+        final SentinelRunStep step = new SentinelRunStep();
+
+        assertThat(step.managedWorkspaceForCleanup(Map.of()))
+                .isEqualTo(SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE);
+    }
+
+    @Test
+    void managedWorkspaceForCleanupUsesAutoPartitionWorkspace() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionIndex(2);
+
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_PARTITION_TOTAL, "4");
+
+        assertThat(step.managedWorkspaceForCleanup(env))
+                .isEqualTo(".sentinel-2");
+    }
+
+    @Test
+    void managedWorkspaceForCleanupSkipsExplicitStepWorkspace() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setWorkspace(CUSTOM_WORKSPACE);
+
+        assertThat(step.managedWorkspaceForCleanup(Map.of())).isNull();
+    }
+
+    @Test
+    void managedWorkspaceForCleanupSkipsEnvWorkspace() {
+        final SentinelRunStep step = new SentinelRunStep();
+        final Map<String, String> env = new HashMap<>();
+        env.put("SENTINEL_WORKSPACE", CUSTOM_WORKSPACE);
+
+        assertThat(step.managedWorkspaceForCleanup(env)).isNull();
+    }
+
+    @Test
+    void prepareManagedWorkspaceClearsDefaultWorkspace(
+            @TempDir final Path tempDir) throws Exception {
+        final SentinelRunStep step = new SentinelRunStep();
+        final FilePath ws = new FilePath(tempDir.toFile());
+        final FilePath managed =
+                ws.child(SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE);
+        managed.mkdirs();
+        managed.child(STALE_FILE).write("old", UTF_8);
+
+        final TaskListener listener = mock(TaskListener.class);
+        when(listener.getLogger()).thenReturn(System.out);
+
+        step.prepareManagedWorkspace(ws, Map.of(), listener);
+
+        assertThat(managed.exists()).isTrue();
+        assertThat(managed.child(STALE_FILE).exists()).isFalse();
+    }
+
+    @Test
+    void prepareManagedWorkspacePreservesExplicitWorkspace(
+            @TempDir final Path tempDir) throws Exception {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setWorkspace(CUSTOM_WORKSPACE);
+
+        final FilePath ws = new FilePath(tempDir.toFile());
+        final FilePath custom = ws.child(CUSTOM_WORKSPACE);
+        custom.mkdirs();
+        custom.child(STALE_FILE).write("old", UTF_8);
+
+        final TaskListener listener = mock(TaskListener.class);
+        when(listener.getLogger()).thenReturn(System.out);
+
+        step.prepareManagedWorkspace(ws, Map.of(), listener);
+
+        assertThat(custom.child(STALE_FILE).exists()).isTrue();
     }
 
     @Test

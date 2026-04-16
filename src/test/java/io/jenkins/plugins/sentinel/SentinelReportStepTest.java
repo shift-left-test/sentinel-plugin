@@ -30,6 +30,13 @@ import org.mockito.Mockito;
 
 class SentinelReportStepTest {
 
+    private static final String PARTITION_ONE = ".sentinel-1";
+    private static final String PARTITION_TWO = ".sentinel-2";
+    private static final String PARTITION_THREE = ".sentinel-3";
+    private static final String STALE_FILE = "stale.txt";
+    private static final String UTF_8 = "UTF-8";
+    private static final String CUSTOM_WORKSPACE = "custom-ws";
+
     @Test
     void noRequiredConstructorParams() {
         final SentinelReportStep step = new SentinelReportStep();
@@ -151,9 +158,46 @@ class SentinelReportStepTest {
         }
 
         assertThat(targetPaths).containsExactly(
-                ws.child(".sentinel-1").getRemote(),
-                ws.child(".sentinel-2").getRemote(),
-                ws.child(".sentinel-3").getRemote());
+                ws.child(PARTITION_ONE).getRemote(),
+                ws.child(PARTITION_TWO).getRemote(),
+                ws.child(PARTITION_THREE).getRemote());
+    }
+
+    @Test
+    void unstashPartitionsClearsExistingPartitionDirectories(
+            @TempDir final Path tempDir) throws Exception {
+        final Run<?, ?> build = mock(Run.class);
+        final Launcher launcher = mock(Launcher.class);
+        final TaskListener listener = mock(TaskListener.class);
+        final EnvVars env = new EnvVars();
+        when(listener.getLogger()).thenReturn(System.out);
+
+        final FilePath ws = new FilePath(tempDir.toFile());
+        ws.child(PARTITION_ONE).child(STALE_FILE).write("1", UTF_8);
+        ws.child(PARTITION_TWO).child(STALE_FILE).write("2", UTF_8);
+        ws.child(PARTITION_THREE).child(STALE_FILE).write("3", UTF_8);
+
+        try (MockedStatic<StashManager> mocked =
+                     Mockito.mockStatic(StashManager.class)) {
+            mocked.when(() -> StashManager.unstash(
+                    any(), ArgumentMatchers.anyString(),
+                    any(FilePath.class),
+                    any(), any(), any()))
+                    .thenAnswer(invocation -> null);
+
+            SentinelReportStep.unstashPartitions(
+                    build, ws, launcher, env, listener, 3);
+        }
+
+        assertThat(ws.child(PARTITION_ONE).exists()).isTrue();
+        assertThat(ws.child(PARTITION_TWO).exists()).isTrue();
+        assertThat(ws.child(PARTITION_THREE).exists()).isTrue();
+        assertThat(ws.child(PARTITION_ONE).child(STALE_FILE).exists())
+                .isFalse();
+        assertThat(ws.child(PARTITION_TWO).child(STALE_FILE).exists())
+                .isFalse();
+        assertThat(ws.child(PARTITION_THREE).child(STALE_FILE).exists())
+                .isFalse();
     }
 
     @Test
@@ -194,13 +238,44 @@ class SentinelReportStepTest {
     }
 
     @Test
+    void unstashSingleClearsDefaultWorkspaceBeforeUnstash(
+            @TempDir final Path tempDir) throws Exception {
+        final Run<?, ?> build = mock(Run.class);
+        final Launcher launcher = mock(Launcher.class);
+        final TaskListener listener = mock(TaskListener.class);
+        final EnvVars env = new EnvVars();
+        when(listener.getLogger()).thenReturn(System.out);
+
+        final FilePath ws = new FilePath(tempDir.toFile());
+        final FilePath managed = ws.child(
+                SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE);
+        managed.mkdirs();
+        managed.child(STALE_FILE).write("old", UTF_8);
+
+        try (MockedStatic<StashManager> mocked =
+                     Mockito.mockStatic(StashManager.class)) {
+            mocked.when(() -> StashManager.unstash(
+                    any(), ArgumentMatchers.anyString(),
+                    any(FilePath.class),
+                    any(), any(), any()))
+                    .thenAnswer(invocation -> null);
+
+            SentinelReportStep.unstashSingle(
+                    build, ws, launcher, env, listener);
+        }
+
+        assertThat(managed.exists()).isTrue();
+        assertThat(managed.child(STALE_FILE).exists()).isFalse();
+    }
+
+    @Test
     void unstashSingleUsesEnvWorkspaceWhenSet(
             @TempDir final Path tempDir) throws Exception {
         final Run<?, ?> build = mock(Run.class);
         final Launcher launcher = mock(Launcher.class);
         final TaskListener listener = mock(TaskListener.class);
         final EnvVars env = new EnvVars();
-        env.put("SENTINEL_WORKSPACE", "custom-ws");
+        env.put("SENTINEL_WORKSPACE", CUSTOM_WORKSPACE);
         when(listener.getLogger())
                 .thenReturn(System.out);
 
@@ -225,6 +300,80 @@ class SentinelReportStepTest {
         }
 
         assertThat(targetPaths).containsExactly(
-                ws.child("custom-ws").getRemote());
+                ws.child(CUSTOM_WORKSPACE).getRemote());
+    }
+
+    @Test
+    void unstashSinglePreservesExplicitWorkspaceContents(
+            @TempDir final Path tempDir) throws Exception {
+        final Run<?, ?> build = mock(Run.class);
+        final Launcher launcher = mock(Launcher.class);
+        final TaskListener listener = mock(TaskListener.class);
+        final EnvVars env = new EnvVars();
+        env.put("SENTINEL_WORKSPACE", CUSTOM_WORKSPACE);
+        when(listener.getLogger()).thenReturn(System.out);
+
+        final FilePath ws = new FilePath(tempDir.toFile());
+        final FilePath custom = ws.child(CUSTOM_WORKSPACE);
+        custom.mkdirs();
+        custom.child(STALE_FILE).write("old", UTF_8);
+
+        try (MockedStatic<StashManager> mocked =
+                     Mockito.mockStatic(StashManager.class)) {
+            mocked.when(() -> StashManager.unstash(
+                    any(), ArgumentMatchers.anyString(),
+                    any(FilePath.class),
+                    any(), any(), any()))
+                    .thenAnswer(invocation -> null);
+
+            SentinelReportStep.unstashSingle(
+                    build, ws, launcher, env, listener);
+        }
+
+        assertThat(custom.child(STALE_FILE).exists()).isTrue();
+    }
+
+    @Test
+    void managedOutputDirForCleanupUsesDefaultWhenUnset() {
+        final SentinelReportStep step = new SentinelReportStep();
+
+        assertThat(step.managedOutputDirForCleanup(new EnvVars()))
+                .isEqualTo(SentinelEnvironment.DEFAULT_OUTPUT_DIR);
+    }
+
+    @Test
+    void managedOutputDirForCleanupSkipsEnvOverride() {
+        final SentinelReportStep step = new SentinelReportStep();
+        final EnvVars env = new EnvVars();
+        env.put("SENTINEL_OUTPUT_DIR", "custom-report");
+
+        assertThat(step.managedOutputDirForCleanup(env)).isNull();
+    }
+
+    @Test
+    void managedOutputDirForCleanupSkipsStepOverride() {
+        final SentinelReportStep step = new SentinelReportStep();
+        step.setOutputDir("custom-report");
+
+        assertThat(step.managedOutputDirForCleanup(new EnvVars())).isNull();
+    }
+
+    @Test
+    void prepareManagedOutputDirClearsDefaultDirectory(
+            @TempDir final Path tempDir) throws Exception {
+        final SentinelReportStep step = new SentinelReportStep();
+        final FilePath ws = new FilePath(tempDir.toFile());
+        final FilePath output =
+                ws.child(SentinelEnvironment.DEFAULT_OUTPUT_DIR);
+        output.mkdirs();
+        output.child("stale.xml").write("old", UTF_8);
+
+        final TaskListener listener = mock(TaskListener.class);
+        when(listener.getLogger()).thenReturn(System.out);
+
+        step.prepareManagedOutputDir(ws, new EnvVars(), listener);
+
+        assertThat(output.exists()).isTrue();
+        assertThat(output.child("stale.xml").exists()).isFalse();
     }
 }

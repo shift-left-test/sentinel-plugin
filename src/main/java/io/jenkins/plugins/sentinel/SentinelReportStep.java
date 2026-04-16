@@ -75,6 +75,12 @@ public class SentinelReportStep extends Step implements Serializable {
                         ? envWs
                         : SentinelEnvironment
                                 .DEFAULT_SINGLE_WORKSPACE;
+        if (envWs == null || envWs.isEmpty()) {
+            SentinelWorkspaceCleaner.recreateDirectory(
+                    ws.child(workspace),
+                    listener,
+                    "single unstash directory");
+        }
         listener.getLogger().printf(
                 "[Sentinel] Unstashing %s%n",
                 SentinelEnvironment.SINGLE_STASH_NAME);
@@ -106,11 +112,16 @@ public class SentinelReportStep extends Step implements Serializable {
         for (int i = 1; i <= total; i++) {
             final String name =
                     SentinelEnvironment.stashName(i);
+            final FilePath target = ws.child(
+                    SentinelEnvironment.partitionWorkspace(i));
+            SentinelWorkspaceCleaner.recreateDirectory(
+                    target,
+                    listener,
+                    "partition unstash directory");
             listener.getLogger().printf(
                     "[Sentinel] Unstashing %s%n", name);
             StashManager.unstash(build, name,
-                    ws.child(SentinelEnvironment
-                            .partitionWorkspace(i)),
+                    target,
                     launcher, env, listener);
         }
     }
@@ -218,6 +229,30 @@ public class SentinelReportStep extends Step implements Serializable {
         sentinelPath = v;
     }
 
+    String managedOutputDirForCleanup(final EnvVars env) {
+        if (outputDir != null) {
+            return null;
+        }
+        final String envOutputDir = env.get(SentinelEnvironment.OUTPUT_DIR);
+        if (envOutputDir != null && !envOutputDir.isEmpty()) {
+            return null;
+        }
+        return SentinelEnvironment.DEFAULT_OUTPUT_DIR;
+    }
+
+    void prepareManagedOutputDir(
+            final FilePath ws,
+            final EnvVars env,
+            final TaskListener listener) throws Exception {
+        final String managedOutputDir = managedOutputDirForCleanup(env);
+        if (managedOutputDir != null) {
+            SentinelWorkspaceCleaner.recreateDirectory(
+                    ws.child(managedOutputDir),
+                    listener,
+                    "report output directory");
+        }
+    }
+
     @Override
     public StepExecution start(final StepContext context) {
         return new SentinelReportExecution(context, this);
@@ -252,6 +287,10 @@ public class SentinelReportStep extends Step implements Serializable {
             if (partitionTotal > 0) {
                 unstashPartitions(build, ws, launcher, env,
                         listener, partitionTotal);
+                SentinelWorkspaceCleaner.recreateDirectory(
+                        ws.child(SentinelEnvironment.MERGED_WORKSPACE),
+                        listener,
+                        "merged workspace");
                 mergePartitions(sentinelCmd, ws, launcher,
                         listener, env, partitionTotal);
                 reportWorkspace =
@@ -268,6 +307,7 @@ public class SentinelReportStep extends Step implements Serializable {
                             ? ThresholdAction.fromString(
                             step.thresholdAction)
                             : null;
+            step.prepareManagedOutputDir(ws, env, listener);
 
             SentinelPostProcessor.reportAndJudge(
                     sentinelCmd, reportWorkspace, srcDir,

@@ -257,6 +257,33 @@ public class SentinelRunStep extends Step implements Serializable {
         return config;
     }
 
+    String managedWorkspaceForCleanup(final Map<String, String> env) {
+        if (workspace != null) {
+            return null;
+        }
+        final String envWorkspace = env.get(SentinelEnvironment.WORKSPACE);
+        if (envWorkspace != null && !envWorkspace.isEmpty()) {
+            return null;
+        }
+        if (partitionIndex != null) {
+            return SentinelEnvironment.partitionWorkspace(partitionIndex);
+        }
+        return SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE;
+    }
+
+    void prepareManagedWorkspace(
+            final FilePath ws,
+            final Map<String, String> env,
+            final TaskListener listener) throws Exception {
+        final String managedWorkspace = managedWorkspaceForCleanup(env);
+        if (managedWorkspace != null) {
+            SentinelWorkspaceCleaner.recreateDirectory(
+                    ws.child(managedWorkspace),
+                    listener,
+                    "sentinel workspace");
+        }
+    }
+
     @SuppressWarnings("PMD.NPathComplexity")
     private void applyOverrides(final SentinelConfiguration c) {
         if (buildCommand != null) {
@@ -329,6 +356,7 @@ public class SentinelRunStep extends Step implements Serializable {
             final SentinelConfiguration config =
                     step.toConfiguration(env);
             SentinelConfigValidator.validate(config);
+            step.prepareManagedWorkspace(ws, env, listener);
 
             final String sentinelCmd = SentinelGlobalConfiguration
                     .getEffectivePath(config.getSentinelPath());
