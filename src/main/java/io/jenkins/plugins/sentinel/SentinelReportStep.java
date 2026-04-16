@@ -52,6 +52,39 @@ public class SentinelReportStep extends Step implements Serializable {
     private String sentinelPath;
 
     /**
+     * Unstashes single (non-partitioned) results into the
+     * workspace subdirectory.
+     *
+     * @param build   current build
+     * @param ws      workspace root
+     * @param launcher launcher
+     * @param env     environment variables
+     * @param listener build listener
+     * @throws Exception if unstash fails
+     */
+    static void unstashSingle(
+            final Run<?, ?> build,
+            final FilePath ws,
+            final Launcher launcher,
+            final EnvVars env,
+            final TaskListener listener) throws Exception {
+        final String envWs =
+                env.get(SentinelEnvironment.WORKSPACE);
+        final String workspace =
+                envWs != null && !envWs.isEmpty()
+                        ? envWs
+                        : SentinelEnvironment
+                                .DEFAULT_SINGLE_WORKSPACE;
+        listener.getLogger().printf(
+                "[Sentinel] Unstashing %s%n",
+                SentinelEnvironment.SINGLE_STASH_NAME);
+        StashManager.unstash(build,
+                SentinelEnvironment.SINGLE_STASH_NAME,
+                ws.child(workspace),
+                launcher, env, listener);
+    }
+
+    /**
      * Unstashes all partition results into their respective
      * partition subdirectories.
      *
@@ -251,20 +284,6 @@ public class SentinelReportStep extends Step implements Serializable {
                 return Integer.parseInt(envTotal);
             }
             return 0;
-        }
-
-        private void unstashSingle(
-                final Run<?, ?> build,
-                final FilePath ws,
-                final Launcher launcher,
-                final EnvVars env,
-                final TaskListener listener) throws Exception {
-            listener.getLogger().printf(
-                    "[Sentinel] Unstashing %s%n",
-                    SentinelEnvironment.SINGLE_STASH_NAME);
-            StashManager.unstash(build,
-                    SentinelEnvironment.SINGLE_STASH_NAME, ws,
-                    launcher, env, listener);
         }
 
         private void mergePartitions(

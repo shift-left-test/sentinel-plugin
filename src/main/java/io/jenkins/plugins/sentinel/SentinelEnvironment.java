@@ -80,7 +80,7 @@ public final class SentinelEnvironment {
     /** Stash name for single (non-partitioned) results. */
     static final String SINGLE_STASH_NAME = "sentinel-partition-single";
     /** Default sentinel workspace for single mode. */
-    static final String DEFAULT_SINGLE_WORKSPACE = ".sentinel";
+    static final String DEFAULT_SINGLE_WORKSPACE = ".sentinel_workspace";
 
     private SentinelEnvironment() {
     }

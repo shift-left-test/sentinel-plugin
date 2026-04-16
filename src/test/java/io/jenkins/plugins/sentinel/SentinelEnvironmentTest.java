@@ -219,6 +219,12 @@ class SentinelEnvironmentTest {
         assertThat(config.getPatterns()).isEmpty();
     }
 
+    @Test
+    void defaultSingleWorkspaceIsSentinelWorkspace() {
+        assertThat(SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE)
+                .isEqualTo(".sentinel_workspace");
+    }
+
     private Map<String, String> requiredEnv() {
         return Map.of(
                 "SENTINEL_BUILD_COMMAND", "make all",

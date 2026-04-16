@@ -155,4 +155,76 @@ class SentinelReportStepTest {
                 ws.child(".sentinel-2").getRemote(),
                 ws.child(".sentinel-3").getRemote());
     }
+
+    @Test
+    void unstashSingleTargetsWorkspaceSubdirectory(
+            @TempDir final Path tempDir) throws Exception {
+        final Run<?, ?> build = mock(Run.class);
+        final Launcher launcher = mock(Launcher.class);
+        final TaskListener listener = mock(TaskListener.class);
+        final EnvVars env = new EnvVars();
+        when(listener.getLogger())
+                .thenReturn(System.out);
+
+        final FilePath ws = new FilePath(tempDir.toFile());
+        final List<String> targetPaths = new ArrayList<>();
+
+        try (MockedStatic<StashManager> mocked =
+                     Mockito.mockStatic(StashManager.class)) {
+            mocked.when(() -> StashManager.unstash(
+                    any(), ArgumentMatchers.anyString(),
+                    any(FilePath.class),
+                    any(), any(), any()))
+                    .thenAnswer(invocation -> {
+                        final FilePath target =
+                                invocation.getArgument(2);
+                        targetPaths.add(target.getRemote());
+                        return null;
+                    });
+
+            SentinelReportStep.unstashSingle(
+                    build, ws, launcher, env, listener);
+        }
+
+        assertThat(targetPaths).containsExactly(
+                ws.child(
+                        SentinelEnvironment
+                                .DEFAULT_SINGLE_WORKSPACE)
+                        .getRemote());
+    }
+
+    @Test
+    void unstashSingleUsesEnvWorkspaceWhenSet(
+            @TempDir final Path tempDir) throws Exception {
+        final Run<?, ?> build = mock(Run.class);
+        final Launcher launcher = mock(Launcher.class);
+        final TaskListener listener = mock(TaskListener.class);
+        final EnvVars env = new EnvVars();
+        env.put("SENTINEL_WORKSPACE", "custom-ws");
+        when(listener.getLogger())
+                .thenReturn(System.out);
+
+        final FilePath ws = new FilePath(tempDir.toFile());
+        final List<String> targetPaths = new ArrayList<>();
+
+        try (MockedStatic<StashManager> mocked =
+                     Mockito.mockStatic(StashManager.class)) {
+            mocked.when(() -> StashManager.unstash(
+                    any(), ArgumentMatchers.anyString(),
+                    any(FilePath.class),
+                    any(), any(), any()))
+                    .thenAnswer(invocation -> {
+                        final FilePath target =
+                                invocation.getArgument(2);
+                        targetPaths.add(target.getRemote());
+                        return null;
+                    });
+
+            SentinelReportStep.unstashSingle(
+                    build, ws, launcher, env, listener);
+        }
+
+        assertThat(targetPaths).containsExactly(
+                ws.child("custom-ws").getRemote());
+    }
 }

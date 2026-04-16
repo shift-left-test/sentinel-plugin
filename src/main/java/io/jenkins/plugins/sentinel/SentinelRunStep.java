@@ -359,7 +359,9 @@ public class SentinelRunStep extends Step implements Serializable {
             } else {
                 stashName = SentinelEnvironment.SINGLE_STASH_NAME;
                 stashDir = config.getWorkspace() != null
-                        ? config.getWorkspace() : ".";
+                        ? config.getWorkspace()
+                        : SentinelEnvironment
+                                .DEFAULT_SINGLE_WORKSPACE;
             }
 
             listener.getLogger().println(
