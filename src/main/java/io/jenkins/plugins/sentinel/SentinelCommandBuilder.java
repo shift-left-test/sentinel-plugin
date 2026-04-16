@@ -30,10 +30,13 @@ public final class SentinelCommandBuilder {
             final SentinelConfiguration config) {
         final List<String> args = new ArrayList<>();
 
-        // Required
-        args.add("--build-command=" + config.getBuildCommand());
-        args.add("--test-command=" + config.getTestCommand());
-        args.add("--test-result-dir=" + config.getTestResultDir());
+        // Build/test fields
+        addIfPresent(args, "--build-command",
+                config.getBuildCommand());
+        addIfPresent(args, "--test-command",
+                config.getTestCommand());
+        addIfPresent(args, "--test-result-dir",
+                config.getTestResultDir());
 
         // Optional string fields
         addIfPresent(args, "--source-dir", config.getSourceDir());
@@ -52,9 +55,7 @@ public final class SentinelCommandBuilder {
         addIfPresent(args, "--limit", config.getLimit());
 
         // Optional long fields
-        if (config.getSeed() != null) {
-            args.add("--seed=" + config.getSeed());
-        }
+        addIfPresent(args, "--seed", config.getSeed());
 
         // Boolean flags
         if (config.isClean()) {
@@ -131,6 +132,15 @@ public final class SentinelCommandBuilder {
             final List<String> args,
             final String flag,
             final Integer value) {
+        if (value != null) {
+            args.add(flag + "=" + value);
+        }
+    }
+
+    private static void addIfPresent(
+            final List<String> args,
+            final String flag,
+            final Long value) {
         if (value != null) {
             args.add(flag + "=" + value);
         }

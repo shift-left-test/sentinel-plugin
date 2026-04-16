@@ -24,10 +24,6 @@ public final class SentinelConfigValidator {
      * @throws IllegalArgumentException if validation fails
      */
     public static void validate(final SentinelConfiguration config) {
-        requireNonBlank(config.getBuildCommand(), "buildCommand");
-        requireNonBlank(config.getTestCommand(), "testCommand");
-        requireNonBlank(config.getTestResultDir(), "testResultDir");
-
         if (config.getPartitionIndex() != null) {
             if (config.getPartitionTotal() == null) {
                 throw new IllegalArgumentException(
@@ -53,14 +49,6 @@ public final class SentinelConfigValidator {
                 throw new IllegalArgumentException(
                         "thresholdAction is required when threshold is set");
             }
-        }
-    }
-
-    private static void requireNonBlank(
-            final String value, final String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(
-                    name + " is required and must not be blank");
         }
     }
 }

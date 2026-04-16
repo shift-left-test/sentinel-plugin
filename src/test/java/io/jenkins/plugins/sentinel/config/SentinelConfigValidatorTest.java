@@ -20,43 +20,34 @@ class SentinelConfigValidatorTest {
     }
 
     @Test
-    void missingBuildCommandThrows() {
+    void nullBuildCommandPasses() {
         final SentinelConfiguration config = minimalConfig();
         config.setBuildCommand(null);
-        assertThatThrownBy(
-                () -> SentinelConfigValidator.validate(config))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("buildCommand");
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getBuildCommand()).isNull();
     }
 
     @Test
-    void missingTestCommandThrows() {
+    void nullTestCommandPasses() {
         final SentinelConfiguration config = minimalConfig();
         config.setTestCommand(null);
-        assertThatThrownBy(
-                () -> SentinelConfigValidator.validate(config))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("testCommand");
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getTestCommand()).isNull();
     }
 
     @Test
-    void missingTestResultDirThrows() {
+    void nullTestResultDirPasses() {
         final SentinelConfiguration config = minimalConfig();
         config.setTestResultDir(null);
-        assertThatThrownBy(
-                () -> SentinelConfigValidator.validate(config))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("testResultDir");
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getTestResultDir()).isNull();
     }
 
     @Test
-    void emptyBuildCommandThrows() {
-        final SentinelConfiguration config = minimalConfig();
-        config.setBuildCommand("  ");
-        assertThatThrownBy(
-                () -> SentinelConfigValidator.validate(config))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("buildCommand");
+    void emptyConfigPasses() {
+        final SentinelConfiguration config = new SentinelConfiguration();
+        SentinelConfigValidator.validate(config);
+        assertThat(config.getBuildCommand()).isNull();
     }
 
     @Test

@@ -25,6 +25,21 @@ class SentinelCommandBuilderTest {
     }
 
     @Test
+    void emptyConfigBuildsNoArgs() {
+        final SentinelConfiguration config = new SentinelConfiguration();
+        final List<String> args = SentinelCommandBuilder.buildRunArgs(config);
+        assertThat(args).isEmpty();
+    }
+
+    @Test
+    void onlyBuildCommandSet() {
+        final SentinelConfiguration config = new SentinelConfiguration();
+        config.setBuildCommand("make all");
+        final List<String> args = SentinelCommandBuilder.buildRunArgs(config);
+        assertThat(args).containsExactly("--build-command=make all");
+    }
+
+    @Test
     void includesSourceDir() {
         final SentinelConfiguration config = minimalConfig();
         config.setSourceDir("src");
