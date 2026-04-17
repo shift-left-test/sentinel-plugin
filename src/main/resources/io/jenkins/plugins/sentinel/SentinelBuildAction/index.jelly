@@ -19,6 +19,12 @@
             <span style="color:#6b7280;">${it.entryCount} mutations across ${it.fileCount} files</span>
           </div>
         </div>
+        <j:if test="${it.hasHtmlReport()}">
+          <a href="dynamic" target="_blank"
+             style="display:inline-block;padding:6px 16px;background:#1ea64b;color:#fff;border-radius:4px;font-size:13px;font-weight:600;text-decoration:none;">
+            View HTML Report
+          </a>
+        </j:if>
       </div>
 
       <!-- Tab bar -->

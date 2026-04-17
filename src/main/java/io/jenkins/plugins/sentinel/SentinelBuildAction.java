@@ -5,6 +5,10 @@
 
 package io.jenkins.plugins.sentinel;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -12,9 +16,12 @@ import hudson.model.Run;
 import io.jenkins.plugins.sentinel.model.MutationEntry;
 import io.jenkins.plugins.sentinel.model.MutationScore;
 import io.jenkins.plugins.sentinel.model.SentinelResult;
+import jakarta.servlet.ServletException;
 import jenkins.model.RunAction2;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 
 /**
  * Attaches mutation testing results to a Jenkins build.
@@ -167,6 +174,45 @@ public class SentinelBuildAction implements RunAction2 {
      */
     public int getSkippedPercent() {
         return percentOf(result.overallScore().skipped());
+    }
+
+    /**
+     * Returns whether the archived HTML report exists.
+     *
+     * @return true if the archived HTML report file exists
+     */
+    public boolean hasHtmlReport() {
+        return run != null
+                && Files.isRegularFile(getHtmlReportPath());
+    }
+
+    /**
+     * Serves the archived HTML report file.
+     *
+     * @param req  stapler request
+     * @param rsp  stapler response
+     * @throws IOException      if file cannot be read
+     * @throws ServletException if serving fails
+     */
+    public void doDynamic(
+            final StaplerRequest2 req,
+            final StaplerResponse2 rsp)
+            throws IOException, ServletException {
+        final Path htmlFile = getHtmlReportPath();
+        rsp.setContentType("text/html;charset=UTF-8");
+        try {
+            Files.copy(htmlFile, rsp.getOutputStream());
+        } catch (NoSuchFileException e) {
+            rsp.sendError(
+                    StaplerResponse2.SC_NOT_FOUND,
+                    "HTML report not found");
+        }
+    }
+
+    private Path getHtmlReportPath() {
+        return run.getRootDir().toPath()
+                .resolve(SentinelEnvironment.ARCHIVE_DIR)
+                .resolve(SentinelEnvironment.HTML_REPORT_FILE);
     }
 
     private int percentOf(final int count) {

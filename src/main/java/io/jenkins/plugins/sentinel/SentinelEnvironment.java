@@ -81,6 +81,12 @@ public final class SentinelEnvironment {
     static final String SINGLE_STASH_NAME = "sentinel-partition-single";
     /** Default sentinel workspace for single mode. */
     static final String DEFAULT_SINGLE_WORKSPACE = ".sentinel_workspace";
+    /** Directory name under build root for archived reports. */
+    static final String ARCHIVE_DIR = "sentinel-report";
+    /** Sentinel XML result file name. */
+    static final String MUTATIONS_XML = "mutations.xml";
+    /** Sentinel HTML report file name. */
+    static final String HTML_REPORT_FILE = "index.html";
 
     private SentinelEnvironment() {
     }

@@ -17,6 +17,13 @@
         <Bug pattern="MC_OVERRIDABLE_METHOD_CALL_IN_CONSTRUCTOR"/>
     </Match>
 
+    <!-- SentinelBuildAction: run field is initialized by RunAction2 lifecycle
+         callbacks (onAttached/onLoad), not in the constructor -->
+    <Match>
+        <Class name="io.jenkins.plugins.sentinel.SentinelBuildAction"/>
+        <Bug pattern="UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR"/>
+    </Match>
+
     <!-- CPS callbacks: inner classes hold reference to outer StepExecution
          which is required to access getContext(); outer class is also Serializable -->
     <Match>
