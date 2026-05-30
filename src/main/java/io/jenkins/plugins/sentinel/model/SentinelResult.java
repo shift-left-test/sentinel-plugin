@@ -6,33 +6,65 @@
 package io.jenkins.plugins.sentinel.model;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
  * Aggregate mutation testing result containing overall score,
  * per-file results, and individual mutation entries.
+ *
+ * <p>A plain class (not a record) because instances are persisted into
+ * the build's {@code build.xml} via Jenkins' XStream, which cannot
+ * deserialize Java records.</p>
  */
 
-public record SentinelResult(
-        MutationScore overallScore,
-        List<FileMutationResult> fileResults,
-        List<MutationEntry> entries) implements Serializable {
+public final class SentinelResult implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    private final MutationScore overallScore;
+    private final List<FileMutationResult> fileResults;
+    private final List<MutationEntry> entries;
+
     /**
-     * Compact constructor that defensively copies the lists.
+     * Creates an aggregate result, defensively copying the lists.
      *
      * @param overallScore the overall mutation score
      * @param fileResults  per-file results (will be copied)
      * @param entries      individual mutation entries (will be copied)
      */
-    public SentinelResult {
-        fileResults = Collections.unmodifiableList(
-                new ArrayList<>(fileResults));
-        entries = Collections.unmodifiableList(
-                new ArrayList<>(entries));
+    public SentinelResult(
+            final MutationScore overallScore,
+            final List<FileMutationResult> fileResults,
+            final List<MutationEntry> entries) {
+        this.overallScore = overallScore;
+        this.fileResults = List.copyOf(fileResults);
+        this.entries = List.copyOf(entries);
+    }
+
+    /**
+     * Returns the overall mutation score.
+     *
+     * @return overall score
+     */
+    public MutationScore overallScore() {
+        return overallScore;
+    }
+
+    /**
+     * Returns the per-file results.
+     *
+     * @return unmodifiable list of per-file results
+     */
+    public List<FileMutationResult> fileResults() {
+        return fileResults;
+    }
+
+    /**
+     * Returns the individual mutation entries.
+     *
+     * @return unmodifiable list of mutation entries
+     */
+    public List<MutationEntry> entries() {
+        return entries;
     }
 }

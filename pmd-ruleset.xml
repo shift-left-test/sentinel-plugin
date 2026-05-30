@@ -23,6 +23,10 @@
         <exclude name="NullAssignment"/>
         <!-- ConstructorCallsOverridableMethod: GlobalConfiguration.load() is required pattern -->
         <exclude name="ConstructorCallsOverridableMethod"/>
+        <!-- AvoidFieldNameMatchingMethodName: model value classes use
+             record-style accessors (field name == accessor name) by design,
+             since they were records converted to classes for XStream support -->
+        <exclude name="AvoidFieldNameMatchingMethodName"/>
     </rule>
 
     <!-- Code Style -->

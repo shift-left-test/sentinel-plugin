@@ -10,12 +10,49 @@ import static org.assertj.core.api.Assertions.within;
 
 import java.util.List;
 
+import hudson.util.XStream2;
 import org.junit.jupiter.api.Test;
 
 class SentinelResultTest {
 
     private static final String FOO_CPP = "src/foo.cpp";
     private static final String BAR_CPP = "src/bar.cpp";
+
+    @Test
+    void roundTripsThroughXStreamForBuildXmlPersistence() {
+        // SentinelBuildAction (a RunAction2) is persisted into build.xml via
+        // Jenkins' XStream2. The model must survive a serialize -> deserialize
+        // cycle so the report reloads after a controller restart.
+        final XStream2 xstream = new XStream2();
+        xstream.allowTypes(new Class<?>[] {
+            SentinelResult.class, MutationScore.class,
+            FileMutationResult.class, MutationEntry.class});
+
+        final SentinelResult original = new SentinelResult(
+                new MutationScore(3, 1, 1),
+                List.of(new FileMutationResult(
+                        FOO_CPP, new MutationScore(2, 1, 0))),
+                List.of(new MutationEntry(
+                        "foo.cpp", FOO_CPP, "Foo", "bar",
+                        42, "AOR", true, false, "FooTest")));
+
+        final String xml = xstream.toXML(original);
+        final SentinelResult restored =
+                (SentinelResult) xstream.fromXML(xml);
+
+        assertThat(restored.overallScore())
+                .isEqualTo(original.overallScore());
+        assertThat(restored.fileResults()).hasSize(1);
+        assertThat(restored.fileResults().get(0).filePath())
+                .isEqualTo(FOO_CPP);
+        assertThat(restored.entries()).hasSize(1);
+        final MutationEntry entry = restored.entries().get(0);
+        assertThat(entry.sourceFilePath()).isEqualTo(FOO_CPP);
+        assertThat(entry.lineNumber()).isEqualTo(42);
+        assertThat(entry.detected()).isTrue();
+        assertThat(entry.skipped()).isFalse();
+        assertThat(entry.killingTest()).isEqualTo("FooTest");
+    }
 
     @Test
     void entryFieldsAreAccessible() {
