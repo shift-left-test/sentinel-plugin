@@ -7,15 +7,32 @@ package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
+import hudson.model.Run;
 import io.jenkins.plugins.sentinel.model.FileMutationResult;
 import io.jenkins.plugins.sentinel.model.MutationEntry;
 import io.jenkins.plugins.sentinel.model.MutationScore;
 import io.jenkins.plugins.sentinel.model.SentinelResult;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.WriteListener;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 
 class SentinelBuildActionTest {
 
@@ -188,6 +205,97 @@ class SentinelBuildActionTest {
         assertThat(action.getUrlName()).isEqualTo("sentinel");
     }
 
+    @Test
+    void doDynamicSetsContentSecurityPolicyHeader(
+            @TempDir final Path tempDir) throws Exception {
+        final Path archive = tempDir.resolve(
+                SentinelEnvironment.ARCHIVE_DIR);
+        Files.createDirectories(archive);
+        Files.writeString(
+                archive.resolve(SentinelEnvironment.HTML_REPORT_FILE),
+                "<html>report</html>");
+
+        final SentinelBuildAction action = createAction(1, 0, 0);
+        final Run<?, ?> run = mock(Run.class);
+        when(run.getRootDir()).thenReturn(tempDir.toFile());
+        action.setRun(run);
+
+        final StaplerRequest2 req = mock(StaplerRequest2.class);
+        final StaplerResponse2 rsp = mock(StaplerResponse2.class);
+        final ByteArrayOutputStream body = new ByteArrayOutputStream();
+        when(rsp.getOutputStream())
+                .thenReturn(new CapturingServletOutputStream(body));
+
+        action.doDynamic(req, rsp);
+
+        verify(rsp).setHeader(
+                eq("Content-Security-Policy"), anyString());
+        assertThat(body.toString(StandardCharsets.UTF_8))
+                .contains("report");
+    }
+
+    @Test
+    void doDynamicSends404WhenReportMissing(
+            @TempDir final Path tempDir) throws Exception {
+        // run set, but no archived report file exists
+        final SentinelBuildAction action = createAction(1, 0, 0);
+        final Run<?, ?> run = mock(Run.class);
+        when(run.getRootDir()).thenReturn(tempDir.toFile());
+        action.setRun(run);
+
+        final StaplerRequest2 req = mock(StaplerRequest2.class);
+        final StaplerResponse2 rsp = mock(StaplerResponse2.class);
+        when(rsp.getOutputStream())
+                .thenReturn(new CapturingServletOutputStream(
+                        new ByteArrayOutputStream()));
+
+        action.doDynamic(req, rsp);
+
+        verify(rsp).setHeader(
+                eq("Content-Security-Policy"), anyString());
+        verify(rsp).sendError(
+                eq(StaplerResponse2.SC_NOT_FOUND), anyString());
+    }
+
+    @Test
+    void doDynamicSends404WhenRunNotAssociated() throws Exception {
+        // run is null (action not attached to a build)
+        final SentinelBuildAction action = createAction(1, 0, 0);
+
+        final StaplerRequest2 req = mock(StaplerRequest2.class);
+        final StaplerResponse2 rsp = mock(StaplerResponse2.class);
+
+        action.doDynamic(req, rsp);
+
+        verify(rsp).sendError(
+                eq(StaplerResponse2.SC_NOT_FOUND), anyString());
+    }
+
+    private static final class CapturingServletOutputStream
+            extends ServletOutputStream {
+        private final OutputStream delegate;
+
+        CapturingServletOutputStream(final OutputStream out) {
+            super();
+            this.delegate = out;
+        }
+
+        @Override
+        public void write(final int b) throws IOException {
+            delegate.write(b);
+        }
+
+        @Override
+        public boolean isReady() {
+            return true;
+        }
+
+        @Override
+        public void setWriteListener(final WriteListener listener) {
+            // no-op for test
+        }
+    }
+
     private SentinelBuildAction createAction(
             final int killed, final int survived, final int skipped) {
         final MutationScore score = new MutationScore(killed, survived, skipped);
@@ -209,6 +317,6 @@ class SentinelBuildActionTest {
         return new MutationEntry(
                 "Foo.java", "src/Foo.java",
                 "Foo", "bar", line, mutator,
-                true, "FooTest::testBar");
+                true, false, "FooTest::testBar");
     }
 }

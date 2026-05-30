@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import hudson.model.DirectoryBrowserSupport;
 import hudson.model.Run;
 import io.jenkins.plugins.sentinel.model.MutationEntry;
 import io.jenkins.plugins.sentinel.model.MutationScore;
@@ -30,6 +31,14 @@ import org.kohsuke.stapler.StaplerResponse2;
 
 public class SentinelBuildAction implements RunAction2 {
 
+    /**
+     * System property that overrides the report CSP header. Hardcoded
+     * instead of referencing {@code DirectoryBrowserSupport.CSP_PROPERTY_NAME}
+     * because that constant is {@code @Restricted} and the access-modifier
+     * checker fails the build on its use; the literal matches Jenkins core.
+     */
+    private static final String CSP_PROPERTY =
+            "hudson.model.DirectoryBrowserSupport.CSP";
     /** Score threshold for green color (80% or above). */
     private static final double GREEN_THRESHOLD = 80.0;
     /** Score threshold for orange color (50% or above). */
@@ -189,6 +198,12 @@ public class SentinelBuildAction implements RunAction2 {
     /**
      * Serves the archived HTML report file.
      *
+     * <p>Applies the same Content-Security-Policy that Jenkins uses for
+     * browsed workspace/artifact files, so the report (which embeds
+     * source code) cannot run scripts in the Jenkins origin. The policy
+     * honors the {@code hudson.model.DirectoryBrowserSupport.CSP}
+     * system property override.</p>
+     *
      * @param req  stapler request
      * @param rsp  stapler response
      * @throws IOException      if file cannot be read
@@ -198,7 +213,14 @@ public class SentinelBuildAction implements RunAction2 {
             final StaplerRequest2 req,
             final StaplerResponse2 rsp)
             throws IOException, ServletException {
+        if (run == null) {
+            rsp.sendError(
+                    StaplerResponse2.SC_NOT_FOUND,
+                    "HTML report not available");
+            return;
+        }
         final Path htmlFile = getHtmlReportPath();
+        applyContentSecurityPolicy(rsp);
         rsp.setContentType("text/html;charset=UTF-8");
         try {
             Files.copy(htmlFile, rsp.getOutputStream());
@@ -206,6 +228,20 @@ public class SentinelBuildAction implements RunAction2 {
             rsp.sendError(
                     StaplerResponse2.SC_NOT_FOUND,
                     "HTML report not found");
+        }
+    }
+
+    private static void applyContentSecurityPolicy(
+            final StaplerResponse2 rsp) {
+        // DEFAULT_CSP_VALUE is a non-null constant, so the property
+        // lookup never returns null; an explicitly empty value disables CSP.
+        final String csp = System.getProperty(
+                CSP_PROPERTY,
+                DirectoryBrowserSupport.DEFAULT_CSP_VALUE);
+        if (!csp.isEmpty()) {
+            rsp.setHeader("Content-Security-Policy", csp);
+            rsp.setHeader("X-WebKit-CSP", csp);
+            rsp.setHeader("X-Content-Security-Policy", csp);
         }
     }
 

@@ -229,6 +229,33 @@ public class SentinelReportStep extends Step implements Serializable {
         sentinelPath = v;
     }
 
+    /**
+     * Parses {@code SENTINEL_PARTITION_TOTAL} from the environment.
+     *
+     * @param env environment variables
+     * @return the partition total, or 0 when the variable is unset
+     * @throws IllegalArgumentException if the value is not a positive
+     *                                  integer
+     */
+    static int parsePartitionTotal(final EnvVars env) {
+        final String value = env.get(SentinelEnvironment.PARTITION_TOTAL);
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        final String error = SentinelEnvironment.PARTITION_TOTAL
+                + " must be a positive integer, got: " + value;
+        final int total;
+        try {
+            total = Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(error, e);
+        }
+        if (total <= 0) {
+            throw new IllegalArgumentException(error);
+        }
+        return total;
+    }
+
     String managedOutputDirForCleanup(final EnvVars env) {
         if (outputDir != null) {
             return null;
@@ -281,7 +308,7 @@ public class SentinelReportStep extends Step implements Serializable {
             final Run<?, ?> build = getContext().get(Run.class);
 
             final String sentinelCmd = resolveSentinelPath(env);
-            final int partitionTotal = resolvePartitionTotal(env);
+            final int partitionTotal = parsePartitionTotal(env);
             final String reportWorkspace;
 
             if (partitionTotal > 0) {
@@ -315,15 +342,6 @@ public class SentinelReportStep extends Step implements Serializable {
                     env, ws, launcher, listener, build);
 
             return null;
-        }
-
-        private int resolvePartitionTotal(final EnvVars env) {
-            final String envTotal = env.get(
-                    SentinelEnvironment.PARTITION_TOTAL);
-            if (envTotal != null && !envTotal.isEmpty()) {
-                return Integer.parseInt(envTotal);
-            }
-            return 0;
         }
 
         private void mergePartitions(

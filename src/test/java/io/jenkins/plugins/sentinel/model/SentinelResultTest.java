@@ -21,7 +21,7 @@ class SentinelResultTest {
     void entryFieldsAreAccessible() {
         final MutationEntry entry = new MutationEntry(
                 "foo.cpp", FOO_CPP, "MyClass", "myMethod",
-                42, "AOR", true, "TestA");
+                42, "AOR", true, false, "TestA");
         assertThat(entry.sourceFile()).isEqualTo("foo.cpp");
         assertThat(entry.sourceFilePath()).isEqualTo(FOO_CPP);
         assertThat(entry.mutatedClass()).isEqualTo("MyClass");
@@ -29,15 +29,17 @@ class SentinelResultTest {
         assertThat(entry.lineNumber()).isEqualTo(42);
         assertThat(entry.mutator()).isEqualTo("AOR");
         assertThat(entry.detected()).isTrue();
+        assertThat(entry.skipped()).isFalse();
         assertThat(entry.killingTest()).isEqualTo("TestA");
     }
 
     @Test
     void skippedEntryHasNullKillingTest() {
-        final MutationEntry entry = MutationEntry.skipped(
+        final MutationEntry entry = MutationEntry.skippedEntry(
                 "bar.cpp", BAR_CPP, "BarClass", "barMethod",
                 10, "ROR");
         assertThat(entry.detected()).isFalse();
+        assertThat(entry.skipped()).isTrue();
         assertThat(entry.killingTest()).isNull();
     }
 

@@ -15,14 +15,17 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 import io.jenkins.plugins.sentinel.model.FileMutationResult;
+import io.jenkins.plugins.sentinel.model.MutationEntry;
 import io.jenkins.plugins.sentinel.model.SentinelResult;
 import org.junit.jupiter.api.Test;
 
 class SentinelResultParserTest {
 
+    private static final String SAMPLE_XML = "mutations-sample.xml";
+
     @Test
     void parsesSampleXml() throws Exception {
-        final SentinelResult result = parseResource("mutations-sample.xml");
+        final SentinelResult result = parseResource(SAMPLE_XML);
 
         assertThat(result.overallScore().killed()).isEqualTo(3);
         assertThat(result.overallScore().survived()).isEqualTo(1);
@@ -33,7 +36,7 @@ class SentinelResultParserTest {
 
     @Test
     void parsesFileResults() throws Exception {
-        final SentinelResult result = parseResource("mutations-sample.xml");
+        final SentinelResult result = parseResource(SAMPLE_XML);
 
         assertThat(result.fileResults()).hasSize(2);
 
@@ -54,8 +57,25 @@ class SentinelResultParserTest {
 
     @Test
     void parsesEntries() throws Exception {
-        final SentinelResult result = parseResource("mutations-sample.xml");
+        final SentinelResult result = parseResource(SAMPLE_XML);
         assertThat(result.entries()).hasSize(5);
+    }
+
+    @Test
+    void distinguishesSurvivedFromSkippedEntries() throws Exception {
+        final SentinelResult result = parseResource(SAMPLE_XML);
+
+        final MutationEntry survived = result.entries().stream()
+                .filter(e -> "multiply".equals(e.mutatedMethod()))
+                .findFirst().orElseThrow();
+        assertThat(survived.detected()).isFalse();
+        assertThat(survived.skipped()).isFalse();
+
+        final MutationEntry skipped = result.entries().stream()
+                .filter(e -> "init".equals(e.mutatedMethod()))
+                .findFirst().orElseThrow();
+        assertThat(skipped.detected()).isFalse();
+        assertThat(skipped.skipped()).isTrue();
     }
 
     @Test
@@ -73,6 +93,29 @@ class SentinelResultParserTest {
             assertThat(result.fileResults()).isEmpty();
             assertThat(result.entries()).isEmpty();
         }
+    }
+
+    @Test
+    void throwsIoExceptionOnNonNumericLineNumber() {
+        final String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <mutations>
+                    <mutation detected="true">
+                        <sourceFile>a.cpp</sourceFile>
+                        <sourceFilePath>src/a.cpp</sourceFilePath>
+                        <mutatedClass>A</mutatedClass>
+                        <mutatedMethod>m</mutatedMethod>
+                        <lineNumber>not-a-number</lineNumber>
+                        <mutator>AOR</mutator>
+                        <killingTest>T</killingTest>
+                    </mutation>
+                </mutations>
+                """;
+        final InputStream in = new ByteArrayInputStream(
+                xml.getBytes(StandardCharsets.UTF_8));
+        assertThatThrownBy(() -> SentinelResultParser.parse(in))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("lineNumber");
     }
 
     @Test

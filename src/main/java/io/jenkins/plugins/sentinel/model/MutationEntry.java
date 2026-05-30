@@ -19,6 +19,7 @@ public record MutationEntry(
         int lineNumber,
         String mutator,
         boolean detected,
+        boolean skipped,
         String killingTest) implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -34,7 +35,7 @@ public record MutationEntry(
      * @param mutator        mutator name
      * @return skipped MutationEntry
      */
-    public static MutationEntry skipped(
+    public static MutationEntry skippedEntry(
             final String sourceFile,
             final String sourceFilePath,
             final String mutatedClass,
@@ -45,6 +46,6 @@ public record MutationEntry(
                 sourceFile, sourceFilePath,
                 mutatedClass, mutatedMethod,
                 lineNumber, mutator,
-                false, null);
+                false, true, null);
     }
 }

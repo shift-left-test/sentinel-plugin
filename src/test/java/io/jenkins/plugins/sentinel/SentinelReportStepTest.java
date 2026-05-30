@@ -6,6 +6,7 @@
 package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -51,6 +52,41 @@ class SentinelReportStepTest {
         assertThat(step.getSourceDir()).isNull();
         assertThat(step.getOutputDir()).isNull();
         assertThat(step.getSentinelPath()).isNull();
+    }
+
+    @Test
+    void parsePartitionTotalReturnsZeroWhenAbsent() {
+        final EnvVars env = new EnvVars();
+        assertThat(SentinelReportStep.parsePartitionTotal(env))
+                .isZero();
+    }
+
+    @Test
+    void parsePartitionTotalReadsValidValue() {
+        final EnvVars env = new EnvVars();
+        env.put(SentinelEnvironment.PARTITION_TOTAL, "4");
+        assertThat(SentinelReportStep.parsePartitionTotal(env))
+                .isEqualTo(4);
+    }
+
+    @Test
+    void parsePartitionTotalRejectsNonNumericValue() {
+        final EnvVars env = new EnvVars();
+        env.put(SentinelEnvironment.PARTITION_TOTAL, "four");
+        assertThatThrownBy(
+                () -> SentinelReportStep.parsePartitionTotal(env))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SENTINEL_PARTITION_TOTAL");
+    }
+
+    @Test
+    void parsePartitionTotalRejectsNonPositiveValue() {
+        final EnvVars env = new EnvVars();
+        env.put(SentinelEnvironment.PARTITION_TOTAL, "0");
+        assertThatThrownBy(
+                () -> SentinelReportStep.parsePartitionTotal(env))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("positive");
     }
 
     @Test

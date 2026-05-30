@@ -75,8 +75,8 @@ public final class SentinelResultParser {
                     getChildText(elem, "mutatedClass");
             final String mutatedMethod =
                     getChildText(elem, "mutatedMethod");
-            final int lineNumber = Integer.parseInt(
-                    getChildText(elem, "lineNumber"));
+            final int lineNumber =
+                    parseLineNumber(getChildText(elem, "lineNumber"));
             final String mutator =
                     getChildText(elem, "mutator");
             final String rawKillingTest =
@@ -95,7 +95,7 @@ public final class SentinelResultParser {
                     sourceFile, sourceFilePath,
                     mutatedClass, mutatedMethod,
                     lineNumber, mutator,
-                    detected, killingTest));
+                    detected, skipped, killingTest));
 
             increment(totals, skipped, detected);
             increment(
@@ -124,6 +124,16 @@ public final class SentinelResultParser {
         }
 
         return new SentinelResult(overallScore, fileResults, entries);
+    }
+
+    private static int parseLineNumber(final String value)
+            throws IOException {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IOException(
+                    "Invalid lineNumber in mutations.xml: " + value, e);
+        }
     }
 
     private static void increment(

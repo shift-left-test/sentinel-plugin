@@ -136,7 +136,7 @@
               <j:when test="${entry.detected()}">
                 <j:set var="entryStatus" value="KILLED" />
               </j:when>
-              <j:when test="${entry.killingTest() == null}">
+              <j:when test="${entry.skipped()}">
                 <j:set var="entryStatus" value="SKIPPED" />
               </j:when>
               <j:otherwise>

@@ -42,6 +42,9 @@
         <exclude name="ShortClassName"/>
         <!-- LinguisticNaming: test method names like toStringContainsScore are valid -->
         <exclude name="LinguisticNaming"/>
+        <!-- TooManyStaticImports: Mockito + AssertJ tests idiomatically use many
+             static imports (mock/when/verify/eq/any...); too strict for tests -->
+        <exclude name="TooManyStaticImports"/>
     </rule>
 
     <!-- Design -->

@@ -8,6 +8,7 @@ package io.jenkins.plugins.sentinel;
 import java.util.List;
 import java.util.Map;
 
+import hudson.AbortException;
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.model.TaskListener;
@@ -29,8 +30,8 @@ final class SentinelRunner {
      * @param ws       working directory
      * @param launcher Jenkins launcher
      * @param listener task listener for log output
-     * @throws Exception if the process exits with a non-zero code
-     *                   or fails to launch
+     * @throws AbortException if the process exits with a non-zero code
+     * @throws Exception      if the process fails to launch
      */
     static void run(
             final List<String> args,
@@ -50,7 +51,7 @@ final class SentinelRunner {
                 .join();
 
         if (exitCode != 0) {
-            throw new RuntimeException(
+            throw new AbortException(
                     "sentinel exited with code " + exitCode);
         }
     }

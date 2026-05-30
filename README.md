@@ -229,6 +229,20 @@ After a mutation test run completes, the plugin provides:
 
 All charts are rendered using [ECharts](https://echarts.apache.org/) via the Jenkins echarts-api plugin.
 
+### Mutation status
+
+Each mutation is classified as one of three statuses, used consistently across the summary, the Mutations tab filter, and the score:
+
+- **KILLED** — a test detected the mutation (good).
+- **SURVIVED** — no test detected the mutation; a test gap to address.
+- **SKIPPED** — the mutation could not be evaluated (build failure, timeout, or runtime error).
+
+The mutation score is `killed / (killed + survived) × 100`. **SKIPPED mutations are excluded from the denominator**, so they do not lower the score.
+
+### HTML report and Content-Security-Policy
+
+The **View HTML Report** link serves sentinel's generated HTML from the build's archived report directory. It is served under the same Content-Security-Policy that Jenkins applies to browsed workspace and artifact files, which by default blocks inline scripts and styles. If your sentinel HTML report renders incorrectly because of this, relax it via the standard `hudson.model.DirectoryBrowserSupport.CSP` system property (the same property used by other report-publishing plugins).
+
 ## Global Configuration
 
 In **Manage Jenkins > System**, you can set the default sentinel executable path. This is used when neither `sentinelPath` step parameter nor `SENTINEL_PATH` environment variable is specified.
