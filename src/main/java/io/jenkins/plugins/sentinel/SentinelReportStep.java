@@ -23,7 +23,6 @@ import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
-import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
@@ -286,7 +285,7 @@ public class SentinelReportStep extends Step implements Serializable {
     }
 
     private static class SentinelReportExecution
-            extends SynchronousNonBlockingStepExecution<Void> {
+            extends SentinelStepExecution<Void> {
 
         private static final long serialVersionUID = 1L;
         private final SentinelReportStep step;
@@ -339,7 +338,7 @@ public class SentinelReportStep extends Step implements Serializable {
             SentinelPostProcessor.reportAndJudge(
                     sentinelCmd, reportWorkspace, srcDir,
                     outDir, step.threshold, action,
-                    env, ws, launcher, listener, build);
+                    env, ws, launcher, listener, build, procHandle);
 
             return null;
         }
@@ -356,7 +355,7 @@ public class SentinelReportStep extends Step implements Serializable {
             SentinelPostProcessor.merge(
                     sentinelCmd, paths,
                     SentinelEnvironment.MERGED_WORKSPACE,
-                    env, ws, launcher, listener);
+                    env, ws, launcher, listener, procHandle);
         }
 
         private String resolveSourceDir(final EnvVars env) {

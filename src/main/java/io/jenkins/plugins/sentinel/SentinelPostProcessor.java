@@ -95,6 +95,7 @@ final class SentinelPostProcessor {
      * @param ws              working directory
      * @param launcher        Jenkins launcher
      * @param listener        task listener
+     * @param procHandle      handle that receives the started process
      * @throws Exception if merge fails
      */
     static void merge(
@@ -104,10 +105,11 @@ final class SentinelPostProcessor {
             final Map<String, String> env,
             final FilePath ws,
             final Launcher launcher,
-            final TaskListener listener) throws Exception {
+            final TaskListener listener,
+            final SentinelProcHandle procHandle) throws Exception {
         final List<String> args = buildMergeCommand(
                 sentinelCmd, partitionPaths, targetWorkspace);
-        SentinelRunner.run(args, env, ws, launcher, listener);
+        SentinelRunner.run(args, env, ws, launcher, listener, procHandle);
     }
 
     /**
@@ -125,6 +127,7 @@ final class SentinelPostProcessor {
      * @param launcher        Jenkins launcher
      * @param listener        task listener
      * @param build           Jenkins build run
+     * @param procHandle      handle that receives the started process
      * @throws Exception if report generation or parsing fails
      */
     @SuppressWarnings("PMD.ExcessiveParameterList")
@@ -139,10 +142,12 @@ final class SentinelPostProcessor {
             final FilePath ws,
             final Launcher launcher,
             final TaskListener listener,
-            final Run<?, ?> build) throws Exception {
+            final Run<?, ?> build,
+            final SentinelProcHandle procHandle) throws Exception {
         final List<String> reportArgs = buildReportCommand(
                 sentinelCmd, workspace, sourceDir, outputDir);
-        SentinelRunner.run(reportArgs, env, ws, launcher, listener);
+        SentinelRunner.run(reportArgs, env, ws, launcher, listener,
+                procHandle);
 
         final Path archiveDir = build.getRootDir().toPath()
                 .resolve(SentinelEnvironment.ARCHIVE_DIR);

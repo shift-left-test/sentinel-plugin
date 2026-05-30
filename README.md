@@ -255,6 +255,31 @@ When `threshold` and `thresholdAction` are set on `sentinelReport`:
 - If the mutation score **meets or exceeds the threshold**, the build result is not affected.
 - If neither is set, the mutation score is reported but does not affect the build result.
 
+## Reliability & Cancellation
+
+Mutation testing is long-running: `sentinelRun` executes your build and test commands once per mutant. A few practices keep builds cancellable and prevent stuck jobs:
+
+- **Wrap the steps in `timeout {}`.** This is the recommended way to bound a run that never finishes (for example, a mutant that makes a test deadlock). On abort or timeout the plugin kills the running sentinel process (and its child build/test processes) on the agent, so cancellation is reliable while the agent connection is alive:
+
+  ```groovy
+  stage('Mutation Test') {
+      steps {
+          checkout scm
+          timeout(time: 2, unit: 'HOURS') {
+              sentinelRun()
+          }
+      }
+  }
+  ```
+
+  `SENTINEL_TIMEOUT` is **not** a substitute — it is sentinel's *per-mutant* `--timeout`, not a wall-clock limit on the whole step.
+
+- **Size executors and agents for the workload.** Each `sentinelRun`/`sentinelReport` holds the node's executor for the entire run. With too few executors on a label, one long partition can leave other builds queued (and appearing not to start) until it finishes. Provision enough executors/agents per label.
+
+- **Keep the remoting ping enabled.** On a remote agent, cancellation relies on the controller↔agent connection. If that connection dies silently (spot reclaim, network blip, paused VM), Jenkins detects it via the remoting ping (`hudson.slaves.ChannelPinger`). Do not disable it, so a dead connection is reaped and the step can be aborted.
+
+- **Avoid restarting the controller mid-run.** These steps do not resume across a controller restart — a restart while a run is in progress fails that step, and a sentinel process already launched on an agent may keep running. Prefer Jenkins' *safe* restart (which waits for running steps), or abort the build first.
+
 ## Development
 
 ### Docker

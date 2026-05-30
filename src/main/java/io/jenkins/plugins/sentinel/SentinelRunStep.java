@@ -24,7 +24,6 @@ import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
 import org.jenkinsci.plugins.workflow.steps.StepExecution;
-import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
@@ -331,7 +330,7 @@ public class SentinelRunStep extends Step implements Serializable {
     }
 
     private static class SentinelRunExecution
-            extends SynchronousNonBlockingStepExecution<Integer> {
+            extends SentinelStepExecution<Integer> {
 
         private static final long serialVersionUID = 1L;
         private final SentinelRunStep step;
@@ -365,7 +364,8 @@ public class SentinelRunStep extends Step implements Serializable {
                     .buildRunArgs(config);
             args.add(0, sentinelCmd);
 
-            SentinelRunner.run(args, env, ws, launcher, listener);
+            SentinelRunner.run(args, env, ws, launcher, listener,
+                    procHandle);
 
             stashResults(ws, config, listener, build);
             return 0;

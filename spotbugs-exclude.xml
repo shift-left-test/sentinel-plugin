@@ -35,4 +35,14 @@
         <Bug pattern="SE_INNER_CLASS"/>
     </Match>
 
+    <!-- procHandle holds a hudson.Proc (not Serializable) so it MUST be
+         transient. It is intentionally not restored on deserialization:
+         SynchronousNonBlockingStepExecution does not resume across a
+         controller restart (onResume fails), and stop() null-guards it. -->
+    <Match>
+        <Class name="io.jenkins.plugins.sentinel.SentinelStepExecution"/>
+        <Field name="procHandle"/>
+        <Bug pattern="SE_TRANSIENT_FIELD_NOT_RESTORED"/>
+    </Match>
+
 </FindBugsFilter>
