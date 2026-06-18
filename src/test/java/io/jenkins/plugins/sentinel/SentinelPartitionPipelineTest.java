@@ -16,7 +16,6 @@ import org.jenkinsci.plugins.structs.describable.DescribableModel;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
@@ -61,7 +60,6 @@ class SentinelPartitionPipelineTest {
         r.assertLogContains("--partition=2/4", run);
     }
 
-    @Disabled("CPS readiness in CI: groovy.lang.IntRange is not serializable by CPS marshaller")
     @Test
     void singleSourceParallelPassesPartitionArgs(final JenkinsRule r)
             throws Exception {
@@ -72,10 +70,13 @@ class SentinelPartitionPipelineTest {
                 "node {\n"
                 + "  withEnv(['SENTINEL_PATH=" + fake + "']) {\n"
                 + "    def n = 2\n"
-                + "    parallel((1..n).collectEntries { i ->\n"
-                + "      [\"P${i}\": { sentinelRun("
-                + "partitionIndex: i, partitionTotal: n) }]\n"
-                + "    })\n"
+                + "    def branches = [:]\n"
+                + "    for (int i = 1; i <= n; i++) {\n"
+                + "      int idx = i\n"
+                + "      branches[\"P${idx}\"] = "
+                + "{ sentinelRun(partitionIndex: idx, partitionTotal: n) }\n"
+                + "    }\n"
+                + "    parallel branches\n"
                 + "  }\n"
                 + "}\n", true));
         final WorkflowRun run = r.buildAndAssertSuccess(job);
