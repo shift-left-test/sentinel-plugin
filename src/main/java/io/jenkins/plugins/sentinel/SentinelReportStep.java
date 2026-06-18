@@ -299,16 +299,16 @@ public class SentinelReportStep extends Step implements Serializable {
      *                                  positive
      */
     int resolvePartitionTotal(final EnvVars env) {
-        if (partitionTotal != null) {
-            if (partitionTotal <= 0) {
-                throw new IllegalArgumentException(
-                        "partitionTotal must be a positive"
-                                + " integer, got: "
-                                + partitionTotal);
-            }
-            return partitionTotal;
+        if (partitionTotal == null) {
+            return parsePartitionTotal(env);
         }
-        return parsePartitionTotal(env);
+        if (partitionTotal <= 0) {
+            throw new IllegalArgumentException(
+                    "partitionTotal must be a positive"
+                            + " integer, got: "
+                            + partitionTotal);
+        }
+        return partitionTotal;
     }
 
     String managedOutputDirForCleanup(final EnvVars env) {

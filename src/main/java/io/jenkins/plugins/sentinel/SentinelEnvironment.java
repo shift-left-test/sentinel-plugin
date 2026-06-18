@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
 
@@ -210,23 +211,20 @@ public final class SentinelEnvironment {
 
     private static Integer parseInteger(final String name,
                                         final String value) {
-        if (value == null || value.isEmpty()) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(
-                    name + " must be an integer, got: '" + value + "'", e);
-        }
+        return parseNumber(name, value, Integer::parseInt);
     }
 
     private static Long parseLong(final String name, final String value) {
+        return parseNumber(name, value, Long::parseLong);
+    }
+
+    private static <T> T parseNumber(final String name, final String value,
+                                     final Function<String, T> parser) {
         if (value == null || value.isEmpty()) {
             return null;
         }
         try {
-            return Long.parseLong(value);
+            return parser.apply(value);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException(
                     name + " must be an integer, got: '" + value + "'", e);
