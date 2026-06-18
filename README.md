@@ -53,50 +53,41 @@ pipeline {
 }
 ```
 
-### Distributed (4 Partitions)
+### Distributed (single source of truth)
 
-Split mutation testing across multiple nodes for faster execution:
+Project settings (build/test commands, patterns, …) live in a repo `sentinel.yaml`,
+so the Jenkinsfile only carries the Jenkins-side orchestration: how many partitions.
+
+`sentinel.yaml` (in the repo root):
+
+```yaml
+build-command: make all
+test-command: make test
+test-result-dir: test-results/
+```
+
+`Jenkinsfile` — one variable `n` drives both the branch count and the
+sentinel `--partition` denominator, so they can never drift:
 
 ```groovy
+def n = 4                                  // the only place the partition count lives
 pipeline {
     agent none
-    environment {
-        SENTINEL_BUILD_COMMAND = 'make all'
-        SENTINEL_TEST_COMMAND = 'make test'
-        SENTINEL_TEST_RESULT_DIR = 'test-results/'
-        SENTINEL_SEED = "${System.currentTimeMillis()}"
-        SENTINEL_PARTITION_TOTAL = '4'
-    }
     stages {
-        stage('Partition') {
-            parallel {
-                stage('Partition 1') {
-                    agent { label 'linux' }
-                    steps {
-                        checkout scm
-                        sentinelRun(partitionIndex: 1)
+        stage('Mutation') {
+            steps {
+                script {
+                    def branches = [:]
+                    for (int i = 1; i <= n; i++) {
+                        int idx = i
+                        branches["Partition ${idx}"] = {
+                            node('linux') {
+                                checkout scm
+                                sentinelRun(partitionIndex: idx, partitionTotal: n)
+                            }
+                        }
                     }
-                }
-                stage('Partition 2') {
-                    agent { label 'linux' }
-                    steps {
-                        checkout scm
-                        sentinelRun(partitionIndex: 2)
-                    }
-                }
-                stage('Partition 3') {
-                    agent { label 'linux' }
-                    steps {
-                        checkout scm
-                        sentinelRun(partitionIndex: 3)
-                    }
-                }
-                stage('Partition 4') {
-                    agent { label 'linux' }
-                    steps {
-                        checkout scm
-                        sentinelRun(partitionIndex: 4)
-                    }
+                    parallel branches
                 }
             }
         }
@@ -104,24 +95,69 @@ pipeline {
             agent { label 'linux' }
             steps {
                 checkout scm
-                sentinelReport(
-                    threshold: 80.0,
-                    thresholdAction: 'UNSTABLE'
-                )
+                sentinelReport(partitionTotal: n,
+                               threshold: 80.0, thresholdAction: 'UNSTABLE')
             }
         }
     }
 }
 ```
 
-**How it works:**
+**Why this shape:**
 
-- Shared configuration lives in the `environment` block — all stages inherit it.
-- Each partition stage only differs by `partitionIndex`.
-- `sentinelRun` automatically stashes results; `sentinelReport` automatically unstashes, merges, generates reports, and applies threshold judgment.
-- The plugin clears its own default/auto-managed sentinel directories before reusing them (`.sentinel_workspace`, `.sentinel-N`, `.sentinel-merged`, default `sentinel-report`), but does not delete user-specified workspace or output paths.
-- The Report stage needs `checkout scm` because HTML reports embed source code.
-- All partitions must share the same `SENTINEL_SEED` for merge to work.
+- `n` is the only place the partition count lives — the loop and `partitionTotal`
+  derive from it, so a mismatched count is impossible. `def n` sits above `pipeline`
+  so every stage (including Report) can read it.
+- The branch map is built with a plain `for` loop, **not** `(1..n)`: a Groovy
+  `IntRange` cannot be serialized by the Pipeline CPS engine when `sentinelRun`
+  checkpoints state, so a range-based recipe fails mid-run. The `for` loop avoids it,
+  and `int idx = i` captures the index per branch so every closure gets its own value.
+- Fan-out is owned by Jenkins' own `parallel`/`node` (the plugin never allocates
+  nodes), so node allocation, abort, and restart stay with the engine.
+- The Report stage needs `checkout scm` because sentinel embeds source code into
+  the HTML report.
+- **Shared seed:** sentinel divides mutants by `--partition=i/n`, so every partition
+  must select mutants identically for the split to be consistent. Pin a fixed seed
+  shared by all partitions — e.g. a fixed `seed` in `sentinel.yaml`, or
+  `environment { SENTINEL_SEED = '...' }` (evaluated once, inherited by all stages).
+  Without a shared fixed seed the partitions can overlap or drop mutants.
+
+#### Passing build/test commands — three options
+
+| | Where settings live | Needs env? |
+|---|---|---|
+| **A (recommended)** | `sentinel.yaml` in the repo | no |
+| **B** | step params: `sentinelRun(buildCommand: …, testCommand: …, testResultDir: …)` | no |
+| **C** | `environment { SENTINEL_* }` block | yes |
+
+`SENTINEL_*` environment variables remain fully supported (option C) and are handy
+for the `matrix` recipe below or for run-scoped shared values (e.g. `SENTINEL_SEED`).
+In the single-source recipe above, option A or B means no environment variables are
+needed at all.
+
+#### Concise alternative: `matrix` (counts NOT auto-checked)
+
+```groovy
+matrix {
+    axes { axis { name 'PARTITION'; values '1', '2', '3', '4' } }
+    agent { label 'linux' }
+    stages {
+        stage('Run') {
+            steps {
+                checkout scm
+                sentinelRun(partitionIndex: env.PARTITION.toInteger(), partitionTotal: 4)
+            }
+        }
+    }
+}
+```
+
+> **Warning:** the number of `axis` values and `partitionTotal` (or
+> `SENTINEL_PARTITION_TOTAL`) must match — nothing enforces this. A mismatch makes
+> `--partition=i/total` wrong and silently overlaps or drops mutants. The plugin
+> fails the report loudly if a partition is missing, but cannot *prevent* the
+> mismatch. Prefer the single-source recipe when correctness matters. (`matrix`
+> cells also do not get per-cell `post {}`.)
 
 ### Docker
 
@@ -153,6 +189,7 @@ Runs sentinel mutation testing. All parameters are optional — configuration co
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `partitionIndex` | int | Partition index (1-based). Combined with `SENTINEL_PARTITION_TOTAL` env var. |
+| `partitionTotal` | int | Total number of partitions. Overrides `SENTINEL_PARTITION_TOTAL`. |
 
 **Override parameters** (override env vars when set):
 
@@ -175,6 +212,7 @@ Collects results, merges partitions, generates reports, and applies threshold ju
 |-----------|------|---------|---------|-------------|
 | `threshold` | double | - | - | Minimum mutation score (0.0-100.0) |
 | `thresholdAction` | String | - | - | Action on failure: `FAILURE` or `UNSTABLE` |
+| `partitionTotal` | int | `SENTINEL_PARTITION_TOTAL` | - | Number of partitions to collect and merge. Overrides the env var. |
 | `sourceDir` | String | `SENTINEL_SOURCE_DIR` | `.` | Source directory for HTML reports |
 | `outputDir` | String | `SENTINEL_OUTPUT_DIR` | `sentinel-report` | Report output directory |
 | `sentinelPath` | String | `SENTINEL_PATH` | `sentinel` | Path to sentinel executable |
@@ -188,6 +226,12 @@ Collects results, merges partitions, generates reports, and applies threshold ju
 ## Environment Variables
 
 All sentinel CLI options can be configured via `SENTINEL_*` environment variables in the pipeline `environment` block:
+
+> Environment variables are **one of three ways** to configure sentinel (the others
+> are a repo `sentinel.yaml` and step parameters). They are most useful for sharing
+> config across the `matrix` recipe or run-scoped values like `SENTINEL_SEED`. With
+> the single-source recipe, `sentinel.yaml` or step parameters mean no `SENTINEL_*`
+> variables are required.
 
 | Variable | sentinel CLI Option | Type |
 |----------|---------------------|------|
