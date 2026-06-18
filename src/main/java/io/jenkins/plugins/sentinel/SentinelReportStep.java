@@ -5,11 +5,13 @@
 
 package io.jenkins.plugins.sentinel;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
+import hudson.AbortException;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
@@ -120,9 +122,20 @@ public class SentinelReportStep extends Step implements Serializable {
                     "partition unstash directory");
             listener.getLogger().printf(
                     "[Sentinel] Unstashing %s%n", name);
-            StashManager.unstash(build, name,
-                    target,
-                    launcher, env, listener);
+            try {
+                StashManager.unstash(build, name,
+                        target,
+                        launcher, env, listener);
+            } catch (IOException e) {
+                final AbortException error = new AbortException(
+                        "Sentinel partition " + i + " of " + total
+                                + " could not be collected (stash '" + name
+                                + "' is missing or unreadable). Ensure every"
+                                + " parallel branch runs sentinelRun with a"
+                                + " matching partitionTotal=" + total + ".");
+                error.initCause(e);
+                throw error;
+            }
         }
     }
 

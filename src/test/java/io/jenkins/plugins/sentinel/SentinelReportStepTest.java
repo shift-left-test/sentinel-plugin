@@ -11,11 +11,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import hudson.AbortException;
 import hudson.EnvVars;
 import hudson.FilePath;
 import hudson.Launcher;
@@ -451,5 +453,37 @@ class SentinelReportStepTest {
 
         assertThat(output.exists()).isTrue();
         assertThat(output.child("stale.xml").exists()).isFalse();
+    }
+
+    @Test
+    void unstashPartitionsFailsClearlyWhenPartitionMissing(
+            @TempDir final Path tempDir) throws Exception {
+        final Run<?, ?> build = mock(Run.class);
+        final Launcher launcher = mock(Launcher.class);
+        final TaskListener listener = mock(TaskListener.class);
+        final EnvVars env = new EnvVars();
+        when(listener.getLogger()).thenReturn(System.out);
+
+        final FilePath ws = new FilePath(tempDir.toFile());
+
+        try (MockedStatic<StashManager> mocked =
+                     Mockito.mockStatic(StashManager.class)) {
+            mocked.when(() -> StashManager.unstash(
+                    any(), ArgumentMatchers.anyString(),
+                    any(FilePath.class), any(), any(), any()))
+                    .thenAnswer(invocation -> {
+                        final String name = invocation.getArgument(1);
+                        if (name.equals(SentinelEnvironment.stashName(2))) {
+                            throw new IOException(
+                                    "No such saved stash '" + name + "'");
+                        }
+                        return null;
+                    });
+
+            assertThatThrownBy(() -> SentinelReportStep.unstashPartitions(
+                    build, ws, launcher, env, listener, 3))
+                    .isInstanceOf(AbortException.class)
+                    .hasMessageContaining("partition 2 of 3");
+        }
     }
 }
