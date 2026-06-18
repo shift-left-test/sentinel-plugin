@@ -147,115 +147,55 @@ public class SentinelReportStep extends Step implements Serializable {
         super();
     }
 
-    /**
-     * Returns the threshold percentage.
-     *
-     * @return threshold
-     */
     public Double getThreshold() {
         return threshold;
     }
 
-    /**
-     * Returns the threshold action name.
-     *
-     * @return threshold action name
-     */
     public String getThresholdAction() {
         return thresholdAction;
     }
 
-    /**
-     * Returns the source directory.
-     *
-     * @return source directory
-     */
     public String getSourceDir() {
         return sourceDir;
     }
 
-    /**
-     * Returns the output directory.
-     *
-     * @return output directory
-     */
     public String getOutputDir() {
         return outputDir;
     }
 
-    /**
-     * Returns the sentinel executable path.
-     *
-     * @return sentinel path
-     */
     public String getSentinelPath() {
         return sentinelPath;
     }
 
-    /**
-     * Sets the threshold percentage.
-     *
-     * @param v threshold
-     */
     @DataBoundSetter
     public void setThreshold(final Double v) {
         threshold = v;
     }
 
-    /**
-     * Sets the threshold action name.
-     *
-     * @param v threshold action name
-     */
     @DataBoundSetter
     public void setThresholdAction(final String v) {
         thresholdAction = v;
     }
 
-    /**
-     * Sets the source directory.
-     *
-     * @param v source directory
-     */
     @DataBoundSetter
     public void setSourceDir(final String v) {
         sourceDir = v;
     }
 
-    /**
-     * Sets the output directory.
-     *
-     * @param v output directory
-     */
     @DataBoundSetter
     public void setOutputDir(final String v) {
         outputDir = v;
     }
 
-    /**
-     * Sets the sentinel executable path.
-     *
-     * @param v sentinel path
-     */
     @DataBoundSetter
     public void setSentinelPath(final String v) {
         sentinelPath = v;
     }
 
-    /**
-     * Returns the partition total.
-     *
-     * @return partition total, or null if not set
-     */
     public Integer getPartitionTotal() {
         return partitionTotal;
     }
 
-    /**
-     * Sets the partition total.
-     *
-     * @param v total number of partitions
-     */
     @DataBoundSetter
     public void setPartitionTotal(final Integer v) {
         partitionTotal = v;

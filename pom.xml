@@ -211,14 +211,10 @@
                     </plugin>
 
                     <!--
-                        JenkinsRule integration tests (the *PipelineTest
-                        suffix) cannot resolve the plugin's @Extension
-                        pipeline steps under this profile: the Error Prone
-                        annotationProcessorPaths above replaces the default
-                        annotation-processor discovery, which drops the SezPoz
-                        indexer that writes META-INF/annotations/hudson.Extension.
-                        They run under the plain `mvn verify` build (the release
-                        path, which does not use this profile) instead.
+                        Error Prone's annotationProcessorPaths above drops the
+                        SezPoz @Extension indexer, so JenkinsRule (*PipelineTest)
+                        steps are undiscoverable under this profile. They run
+                        under the plain `mvn verify` build instead.
                     -->
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>

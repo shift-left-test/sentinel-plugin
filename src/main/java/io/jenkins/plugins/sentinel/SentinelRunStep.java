@@ -65,191 +65,91 @@ public class SentinelRunStep extends Step implements Serializable {
         super();
     }
 
-    /**
-     * Returns the partition index.
-     *
-     * @return partition index, or null if not set
-     */
     public Integer getPartitionIndex() {
         return partitionIndex;
     }
 
-    /**
-     * Sets the partition index.
-     *
-     * @param v partition index (1-based)
-     */
     @DataBoundSetter
     public void setPartitionIndex(final Integer v) {
         partitionIndex = v;
     }
 
-    /**
-     * Returns the partition total.
-     *
-     * @return partition total, or null if not set
-     */
     public Integer getPartitionTotal() {
         return partitionTotal;
     }
 
-    /**
-     * Sets the partition total.
-     *
-     * @param v total number of partitions
-     */
     @DataBoundSetter
     public void setPartitionTotal(final Integer v) {
         partitionTotal = v;
     }
 
-    /**
-     * Returns the build command.
-     *
-     * @return build command, or null if not set
-     */
     public String getBuildCommand() {
         return buildCommand;
     }
 
-    /**
-     * Sets the build command.
-     *
-     * @param v build command
-     */
     @DataBoundSetter
     public void setBuildCommand(final String v) {
         buildCommand = v;
     }
 
-    /**
-     * Returns the test command.
-     *
-     * @return test command, or null if not set
-     */
     public String getTestCommand() {
         return testCommand;
     }
 
-    /**
-     * Sets the test command.
-     *
-     * @param v test command
-     */
     @DataBoundSetter
     public void setTestCommand(final String v) {
         testCommand = v;
     }
 
-    /**
-     * Returns the test result directory.
-     *
-     * @return test result directory, or null if not set
-     */
     public String getTestResultDir() {
         return testResultDir;
     }
 
-    /**
-     * Sets the test result directory.
-     *
-     * @param v test result directory
-     */
     @DataBoundSetter
     public void setTestResultDir(final String v) {
         testResultDir = v;
     }
 
-    /**
-     * Returns the source directory.
-     *
-     * @return source directory, or null if not set
-     */
     public String getSourceDir() {
         return sourceDir;
     }
 
-    /**
-     * Sets the source directory.
-     *
-     * @param v source directory
-     */
     @DataBoundSetter
     public void setSourceDir(final String v) {
         sourceDir = v;
     }
 
-    /**
-     * Returns the random seed.
-     *
-     * @return seed, or null if not set
-     */
     public Long getSeed() {
         return seed;
     }
 
-    /**
-     * Sets the random seed.
-     *
-     * @param v seed
-     */
     @DataBoundSetter
     public void setSeed(final Long v) {
         seed = v;
     }
 
-    /**
-     * Returns whether verbose output is enabled.
-     *
-     * @return verbose flag, or null if not set
-     */
     public Boolean isVerbose() {
         return verbose;
     }
 
-    /**
-     * Sets whether verbose output is enabled.
-     *
-     * @param v verbose flag
-     */
     @DataBoundSetter
     public void setVerbose(final Boolean v) {
         verbose = v;
     }
 
-    /**
-     * Returns the sentinel workspace directory.
-     *
-     * @return workspace, or null if not set
-     */
     public String getWorkspace() {
         return workspace;
     }
 
-    /**
-     * Sets the sentinel workspace directory.
-     *
-     * @param v workspace
-     */
     @DataBoundSetter
     public void setWorkspace(final String v) {
         workspace = v;
     }
 
-    /**
-     * Returns the sentinel executable path override.
-     *
-     * @return sentinel path, or null if not set
-     */
     public String getSentinelPath() {
         return sentinelPath;
     }
 
-    /**
-     * Sets the sentinel executable path override.
-     *
-     * @param v sentinel path
-     */
     @DataBoundSetter
     public void setSentinelPath(final String v) {
         sentinelPath = v;
