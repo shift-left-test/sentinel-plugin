@@ -260,6 +260,15 @@ All sentinel CLI options can be configured via `SENTINEL_*` environment variable
 | `SENTINEL_OUTPUT_DIR` | `--output-dir` | String |
 | `SENTINEL_PATH` | sentinel executable path | String |
 
+### Validation
+
+- A **malformed value** for a known variable fails the build with a clear
+  message naming the variable — for example `SENTINEL_TIMEOUT must be an
+  integer, got: '2h'`. Bad values are never silently ignored.
+- An **unrecognized `SENTINEL_*` variable** (usually a typo such as
+  `SENTINEL_TIMOUT`) is reported as a warning and ignored; it does not fail
+  the build, so unrelated `SENTINEL_`-prefixed variables stay safe.
+
 ## Build Results & Reporting
 
 After a mutation test run completes, the plugin provides:
