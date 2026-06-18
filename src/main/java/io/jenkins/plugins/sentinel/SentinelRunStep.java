@@ -375,6 +375,9 @@ public class SentinelRunStep extends Step implements Serializable {
                     getContext().get(EnvVars.class);
             final Run<?, ?> build = getContext().get(Run.class);
 
+            SentinelEnvironment.warnUnknownVariables(
+                    env, listener.getLogger());
+
             final SentinelConfiguration config =
                     step.toConfiguration(env);
             SentinelConfigValidator.validate(config);

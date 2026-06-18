@@ -102,6 +102,23 @@ class SentinelPartitionPipelineTest {
         r.assertLogContains("--partition=3/4", run);
     }
 
+    @Test
+    void runStepWarnsOnUnknownSentinelVariable(final JenkinsRule r)
+            throws Exception {
+        final String fake = writeFakeSentinel(r);
+        final WorkflowJob job =
+                r.createProject(WorkflowJob.class, "unknownvar");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n"
+                + "  withEnv(['SENTINEL_PATH=" + fake + "',"
+                + " 'SENTINEL_TIMOUT=300']) {\n"
+                + "    sentinelRun()\n"
+                + "  }\n"
+                + "}\n", true));
+        final WorkflowRun run = r.buildAndAssertSuccess(job);
+        r.assertLogContains("SENTINEL_TIMOUT", run);
+    }
+
     private static String writeFakeSentinel(final JenkinsRule r)
             throws Exception {
         final File script =

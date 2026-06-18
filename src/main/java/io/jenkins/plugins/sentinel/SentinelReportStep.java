@@ -362,6 +362,9 @@ public class SentinelReportStep extends Step implements Serializable {
             final EnvVars env = getContext().get(EnvVars.class);
             final Run<?, ?> build = getContext().get(Run.class);
 
+            SentinelEnvironment.warnUnknownVariables(
+                    env, listener.getLogger());
+
             final String sentinelCmd = resolveSentinelPath(env);
             final int partitionTotal =
                     step.resolvePartitionTotal(env);
