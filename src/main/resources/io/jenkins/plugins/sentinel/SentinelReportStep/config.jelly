@@ -10,6 +10,10 @@
         <f:select/>
     </f:entry>
 
+    <f:entry title="Partition Total" field="partitionTotal">
+        <f:textbox/>
+    </f:entry>
+
     <f:advanced>
         <f:entry title="Source Directory" field="sourceDir">
             <f:textbox/>

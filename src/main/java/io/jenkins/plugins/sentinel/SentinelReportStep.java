@@ -49,6 +49,7 @@ public class SentinelReportStep extends Step implements Serializable {
     private String sourceDir;
     private String outputDir;
     private String sentinelPath;
+    private Integer partitionTotal;
 
     /**
      * Unstashes single (non-partitioned) results into the
@@ -229,6 +230,25 @@ public class SentinelReportStep extends Step implements Serializable {
     }
 
     /**
+     * Returns the partition total.
+     *
+     * @return partition total, or null if not set
+     */
+    public Integer getPartitionTotal() {
+        return partitionTotal;
+    }
+
+    /**
+     * Sets the partition total.
+     *
+     * @param v total number of partitions
+     */
+    @DataBoundSetter
+    public void setPartitionTotal(final Integer v) {
+        partitionTotal = v;
+    }
+
+    /**
      * Parses {@code SENTINEL_PARTITION_TOTAL} from the environment.
      *
      * @param env environment variables
@@ -253,6 +273,29 @@ public class SentinelReportStep extends Step implements Serializable {
             throw new IllegalArgumentException(error);
         }
         return total;
+    }
+
+    /**
+     * Resolves the partition total, preferring the step parameter
+     * and falling back to the
+     * {@code SENTINEL_PARTITION_TOTAL} env var.
+     *
+     * @param env environment variables
+     * @return the partition total, or 0 when neither is set
+     * @throws IllegalArgumentException if the parameter is not
+     *                                  positive
+     */
+    int resolvePartitionTotal(final EnvVars env) {
+        if (partitionTotal != null) {
+            if (partitionTotal <= 0) {
+                throw new IllegalArgumentException(
+                        "partitionTotal must be a positive"
+                                + " integer, got: "
+                                + partitionTotal);
+            }
+            return partitionTotal;
+        }
+        return parsePartitionTotal(env);
     }
 
     String managedOutputDirForCleanup(final EnvVars env) {
@@ -307,7 +350,8 @@ public class SentinelReportStep extends Step implements Serializable {
             final Run<?, ?> build = getContext().get(Run.class);
 
             final String sentinelCmd = resolveSentinelPath(env);
-            final int partitionTotal = parsePartitionTotal(env);
+            final int partitionTotal =
+                    step.resolvePartitionTotal(env);
             final String reportWorkspace;
 
             if (partitionTotal > 0) {

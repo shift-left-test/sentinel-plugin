@@ -52,6 +52,46 @@ class SentinelReportStepTest {
         assertThat(step.getSourceDir()).isNull();
         assertThat(step.getOutputDir()).isNull();
         assertThat(step.getSentinelPath()).isNull();
+        assertThat(step.getPartitionTotal()).isNull();
+    }
+
+    @Test
+    void partitionTotalSetter() {
+        final SentinelReportStep step = new SentinelReportStep();
+        step.setPartitionTotal(4);
+        assertThat(step.getPartitionTotal()).isEqualTo(4);
+    }
+
+    @Test
+    void resolvePartitionTotalPrefersStepParam() {
+        final SentinelReportStep step = new SentinelReportStep();
+        step.setPartitionTotal(8);
+        final EnvVars env = new EnvVars();
+        env.put(SentinelEnvironment.PARTITION_TOTAL, "4");
+        assertThat(step.resolvePartitionTotal(env)).isEqualTo(8);
+    }
+
+    @Test
+    void resolvePartitionTotalFallsBackToEnv() {
+        final SentinelReportStep step = new SentinelReportStep();
+        final EnvVars env = new EnvVars();
+        env.put(SentinelEnvironment.PARTITION_TOTAL, "4");
+        assertThat(step.resolvePartitionTotal(env)).isEqualTo(4);
+    }
+
+    @Test
+    void resolvePartitionTotalReturnsZeroWhenUnset() {
+        final SentinelReportStep step = new SentinelReportStep();
+        assertThat(step.resolvePartitionTotal(new EnvVars())).isZero();
+    }
+
+    @Test
+    void resolvePartitionTotalRejectsNonPositiveParam() {
+        final SentinelReportStep step = new SentinelReportStep();
+        step.setPartitionTotal(0);
+        assertThatThrownBy(() -> step.resolvePartitionTotal(new EnvVars()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("positive");
     }
 
     @Test
