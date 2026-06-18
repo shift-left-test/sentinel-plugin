@@ -50,12 +50,9 @@ class SentinelPartitionPipelineTest {
         final String fake = writeFakeSentinel(r);
         final WorkflowJob job =
                 r.createProject(WorkflowJob.class, "literal");
-        job.setDefinition(new CpsFlowDefinition(
-                "node {\n"
-                + "  withEnv(['SENTINEL_PATH=" + fake + "']) {\n"
-                + "    sentinelRun(partitionIndex: 2, partitionTotal: 4)\n"
-                + "  }\n"
-                + "}\n", true));
+        job.setDefinition(new CpsFlowDefinition(pipelineScript(fake, "",
+                "    sentinelRun(partitionIndex: 2, partitionTotal: 4)\n"),
+                true));
         final WorkflowRun run = r.buildAndAssertSuccess(job);
         r.assertLogContains("--partition=2/4", run);
     }
@@ -66,19 +63,15 @@ class SentinelPartitionPipelineTest {
         final String fake = writeFakeSentinel(r);
         final WorkflowJob job =
                 r.createProject(WorkflowJob.class, "range");
-        job.setDefinition(new CpsFlowDefinition(
-                "node {\n"
-                + "  withEnv(['SENTINEL_PATH=" + fake + "']) {\n"
-                + "    def n = 2\n"
+        job.setDefinition(new CpsFlowDefinition(pipelineScript(fake, "",
+                "    def n = 2\n"
                 + "    def branches = [:]\n"
                 + "    for (int i = 1; i <= n; i++) {\n"
                 + "      int idx = i\n"
                 + "      branches[\"P${idx}\"] = "
                 + "{ sentinelRun(partitionIndex: idx, partitionTotal: n) }\n"
                 + "    }\n"
-                + "    parallel branches\n"
-                + "  }\n"
-                + "}\n", true));
+                + "    parallel branches\n"), true));
         final WorkflowRun run = r.buildAndAssertSuccess(job);
         r.assertLogContains("--partition=1/2", run);
         r.assertLogContains("--partition=2/2", run);
@@ -91,13 +84,9 @@ class SentinelPartitionPipelineTest {
         final WorkflowJob job =
                 r.createProject(WorkflowJob.class, "cast");
         job.setDefinition(new CpsFlowDefinition(
-                "node {\n"
-                + "  withEnv(['SENTINEL_PATH=" + fake + "',"
-                + " 'PARTITION=3']) {\n"
-                + "    sentinelRun(partitionIndex: "
-                + "env.PARTITION.toInteger(), partitionTotal: 4)\n"
-                + "  }\n"
-                + "}\n", true));
+                pipelineScript(fake, ", 'PARTITION=3'",
+                "    sentinelRun(partitionIndex: "
+                + "env.PARTITION.toInteger(), partitionTotal: 4)\n"), true));
         final WorkflowRun run = r.buildAndAssertSuccess(job);
         r.assertLogContains("--partition=3/4", run);
     }
@@ -109,20 +98,38 @@ class SentinelPartitionPipelineTest {
         final WorkflowJob job =
                 r.createProject(WorkflowJob.class, "unknownvar");
         job.setDefinition(new CpsFlowDefinition(
-                "node {\n"
-                + "  withEnv(['SENTINEL_PATH=" + fake + "',"
-                + " 'SENTINEL_TIMOUT=300']) {\n"
-                + "    sentinelRun()\n"
-                + "  }\n"
-                + "}\n", true));
+                pipelineScript(fake, ", 'SENTINEL_TIMOUT=300'",
+                "    sentinelRun()\n"), true));
         final WorkflowRun run = r.buildAndAssertSuccess(job);
         r.assertLogContains("SENTINEL_TIMOUT", run);
     }
 
+    /**
+     * Wraps a pipeline body in a {@code node { withEnv(...) { ... } }} block
+     * with {@code SENTINEL_PATH} pointing at the fake sentinel, plus any
+     * extra environment entries.
+     *
+     * @param fake     path to the fake sentinel executable
+     * @param extraEnv extra withEnv entries (e.g. {@code ", 'PARTITION=3'"})
+     *                 or an empty string
+     * @param body     the pipeline steps to run inside withEnv
+     * @return the full pipeline script
+     */
+    private static String pipelineScript(final String fake,
+                                         final String extraEnv,
+                                         final String body) {
+        return "node {\n"
+                + "  withEnv(['SENTINEL_PATH=" + fake + "'" + extraEnv
+                + "]) {\n"
+                + body
+                + "  }\n"
+                + "}\n";
+    }
+
     private static String writeFakeSentinel(final JenkinsRule r)
             throws Exception {
-        final File script =
-                new File(r.jenkins.getRootDir(), "fake-sentinel.sh");
+        final File script = r.jenkins.getRootDir().toPath()
+                .resolve("fake-sentinel.sh").toFile();
         Files.writeString(script.toPath(),
                 "#!/bin/sh\n"
                 + "for a in \"$@\"; do\n"

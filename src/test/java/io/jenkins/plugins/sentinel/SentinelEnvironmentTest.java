@@ -21,6 +21,9 @@ class SentinelEnvironmentTest {
 
     private static final String TRUE_STR = "true";
     private static final long SEED_VALUE = 12_345L;
+    private static final String ENV_TIMEOUT = "SENTINEL_TIMEOUT";
+    private static final String ENV_TIMOUT_TYPO = "SENTINEL_TIMOUT";
+    private static final String TIMEOUT_VALUE = "300";
 
     @Test
     void readsRequiredFieldsFromEnv() {
@@ -66,7 +69,7 @@ class SentinelEnvironmentTest {
     @Test
     void readsIntegerFieldsFromEnv() {
         final Map<String, String> env = new HashMap<>(requiredEnv());
-        env.put("SENTINEL_TIMEOUT", "300");
+        env.put(ENV_TIMEOUT, TIMEOUT_VALUE);
         env.put("SENTINEL_MUTANTS_PER_LINE", "5");
         env.put("SENTINEL_LIMIT", "1000");
 
@@ -162,12 +165,12 @@ class SentinelEnvironmentTest {
     @Test
     void invalidIntegerEnvVarFailsWithVariableName() {
         final Map<String, String> env = new HashMap<>(requiredEnv());
-        env.put("SENTINEL_TIMEOUT", "2h");
+        env.put(ENV_TIMEOUT, "2h");
 
         assertThatThrownBy(() ->
                 SentinelEnvironment.toConfiguration(env))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("SENTINEL_TIMEOUT")
+                .hasMessageContaining(ENV_TIMEOUT)
                 .hasMessageContaining("2h");
     }
 
@@ -257,16 +260,16 @@ class SentinelEnvironmentTest {
     void unknownVariableNamesListsTyposSorted() {
         final Map<String, String> env = new HashMap<>(requiredEnv());
         env.put("SENTINEL_VERBOZE", "true");
-        env.put("SENTINEL_TIMOUT", "300");
+        env.put(ENV_TIMOUT_TYPO, TIMEOUT_VALUE);
 
         assertThat(SentinelEnvironment.unknownVariableNames(env))
-                .containsExactly("SENTINEL_TIMOUT", "SENTINEL_VERBOZE");
+                .containsExactly(ENV_TIMOUT_TYPO, "SENTINEL_VERBOZE");
     }
 
     @Test
     void unknownVariableNamesIgnoresKnownAndNonSentinel() {
         final Map<String, String> env = new HashMap<>(requiredEnv());
-        env.put("SENTINEL_TIMEOUT", "300");
+        env.put(ENV_TIMEOUT, TIMEOUT_VALUE);
         env.put("PATH", "/usr/bin");
         env.put("JAVA_HOME", "/opt/java");
 
@@ -277,7 +280,7 @@ class SentinelEnvironmentTest {
     @Test
     void warnUnknownVariablesLogsEachUnknown() {
         final Map<String, String> env = new HashMap<>(requiredEnv());
-        env.put("SENTINEL_TIMOUT", "300");
+        env.put(ENV_TIMOUT_TYPO, TIMEOUT_VALUE);
 
         final ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (PrintStream ps =
@@ -286,7 +289,7 @@ class SentinelEnvironmentTest {
         }
 
         assertThat(out.toString(StandardCharsets.UTF_8))
-                .contains("SENTINEL_TIMOUT")
+                .contains(ENV_TIMOUT_TYPO)
                 .contains("unknown variable");
     }
 
