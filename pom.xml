@@ -210,6 +210,26 @@
                         </configuration>
                     </plugin>
 
+                    <!--
+                        JenkinsRule integration tests (the *PipelineTest
+                        suffix) cannot resolve the plugin's @Extension
+                        pipeline steps under this profile: the Error Prone
+                        annotationProcessorPaths above replaces the default
+                        annotation-processor discovery, which drops the SezPoz
+                        indexer that writes META-INF/annotations/hudson.Extension.
+                        They run under the plain `mvn verify` build (the release
+                        path, which does not use this profile) instead.
+                    -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludes combine.children="append">
+                                <exclude>**/*PipelineTest.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+
                     <!-- JaCoCo -->
                     <plugin>
                         <groupId>org.jacoco</groupId>
