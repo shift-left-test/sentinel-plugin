@@ -5,8 +5,12 @@
 
 package io.jenkins.plugins.sentinel;
 
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
 
@@ -66,6 +70,17 @@ public final class SentinelEnvironment {
     static final String OUTPUT_DIR = "SENTINEL_OUTPUT_DIR";
     /** Environment variable for sentinel executable path. */
     static final String PATH = "SENTINEL_PATH";
+
+    /** Common prefix for all sentinel environment variables. */
+    static final String SENTINEL_PREFIX = "SENTINEL_";
+
+    /** All environment variable names the plugin recognizes. */
+    private static final Set<String> KNOWN_NAMES = Set.of(
+            BUILD_COMMAND, TEST_COMMAND, TEST_RESULT_DIR, PARTITION_TOTAL,
+            SEED, SOURCE_DIR, COMPILE_DB_DIR, TIMEOUT, FROM, UNCOMMITTED,
+            PATTERNS, EXTENSIONS, GENERATOR, MUTANTS_PER_LINE, OPERATORS,
+            LIMIT, LCOV_TRACEFILES, CONFIG, CLEAN, DRY_RUN, VERBOSE,
+            WORKSPACE, OUTPUT_DIR, PATH);
 
     /** Prefix for partition workspace directories. */
     static final String PARTITION_PREFIX = ".sentinel-";
@@ -155,6 +170,42 @@ public final class SentinelEnvironment {
      */
     public static String partitionWorkspace(final int index) {
         return PARTITION_PREFIX + index;
+    }
+
+    /**
+     * Returns the {@code SENTINEL_*} environment variable names that the
+     * plugin does not recognize (likely typos), sorted for stable output.
+     *
+     * @param env environment variable map
+     * @return sorted list of unknown names, empty if none
+     */
+    public static List<String> unknownVariableNames(
+            final Map<String, String> env) {
+        final List<String> unknown = new ArrayList<>();
+        for (final String key : env.keySet()) {
+            if (key.startsWith(SENTINEL_PREFIX)
+                    && !KNOWN_NAMES.contains(key)) {
+                unknown.add(key);
+            }
+        }
+        Collections.sort(unknown);
+        return unknown;
+    }
+
+    /**
+     * Logs a warning for each unrecognized {@code SENTINEL_*} variable.
+     * Never fails the build — unknown variables are likely typos but may
+     * also be unrelated, so they are reported and ignored.
+     *
+     * @param env    environment variable map
+     * @param logger destination for warning lines
+     */
+    public static void warnUnknownVariables(
+            final Map<String, String> env, final PrintStream logger) {
+        for (final String name : unknownVariableNames(env)) {
+            logger.println("[Sentinel] Ignoring unknown variable: " + name
+                    + " (typo of a SENTINEL_* option?)");
+        }
     }
 
     private static Integer parseInteger(final String name,

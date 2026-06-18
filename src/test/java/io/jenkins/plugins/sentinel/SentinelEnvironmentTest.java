@@ -8,6 +8,9 @@ package io.jenkins.plugins.sentinel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -248,6 +251,43 @@ class SentinelEnvironmentTest {
     void defaultSingleWorkspaceIsSentinelWorkspace() {
         assertThat(SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE)
                 .isEqualTo(".sentinel_workspace");
+    }
+
+    @Test
+    void unknownVariableNamesListsTyposSorted() {
+        final Map<String, String> env = new HashMap<>(requiredEnv());
+        env.put("SENTINEL_VERBOZE", "true");
+        env.put("SENTINEL_TIMOUT", "300");
+
+        assertThat(SentinelEnvironment.unknownVariableNames(env))
+                .containsExactly("SENTINEL_TIMOUT", "SENTINEL_VERBOZE");
+    }
+
+    @Test
+    void unknownVariableNamesIgnoresKnownAndNonSentinel() {
+        final Map<String, String> env = new HashMap<>(requiredEnv());
+        env.put("SENTINEL_TIMEOUT", "300");
+        env.put("PATH", "/usr/bin");
+        env.put("JAVA_HOME", "/opt/java");
+
+        assertThat(SentinelEnvironment.unknownVariableNames(env))
+                .isEmpty();
+    }
+
+    @Test
+    void warnUnknownVariablesLogsEachUnknown() {
+        final Map<String, String> env = new HashMap<>(requiredEnv());
+        env.put("SENTINEL_TIMOUT", "300");
+
+        final ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (PrintStream ps =
+                     new PrintStream(out, true, StandardCharsets.UTF_8)) {
+            SentinelEnvironment.warnUnknownVariables(env, ps);
+        }
+
+        assertThat(out.toString(StandardCharsets.UTF_8))
+                .contains("SENTINEL_TIMOUT")
+                .contains("unknown variable");
     }
 
     private Map<String, String> requiredEnv() {
