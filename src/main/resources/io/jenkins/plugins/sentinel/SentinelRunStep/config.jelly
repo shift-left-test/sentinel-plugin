@@ -6,6 +6,10 @@
         <f:textbox/>
     </f:entry>
 
+    <f:entry title="Partition Total" field="partitionTotal">
+        <f:textbox/>
+    </f:entry>
+
     <f:entry title="Build Command" field="buildCommand">
         <f:textbox/>
     </f:entry>

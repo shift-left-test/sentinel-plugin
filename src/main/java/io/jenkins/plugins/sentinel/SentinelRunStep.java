@@ -47,6 +47,7 @@ public class SentinelRunStep extends Step implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private Integer partitionIndex;
+    private Integer partitionTotal;
     private String buildCommand;
     private String testCommand;
     private String testResultDir;
@@ -81,6 +82,25 @@ public class SentinelRunStep extends Step implements Serializable {
     @DataBoundSetter
     public void setPartitionIndex(final Integer v) {
         partitionIndex = v;
+    }
+
+    /**
+     * Returns the partition total.
+     *
+     * @return partition total, or null if not set
+     */
+    public Integer getPartitionTotal() {
+        return partitionTotal;
+    }
+
+    /**
+     * Sets the partition total.
+     *
+     * @param v total number of partitions
+     */
+    @DataBoundSetter
+    public void setPartitionTotal(final Integer v) {
+        partitionTotal = v;
     }
 
     /**
@@ -311,6 +331,9 @@ public class SentinelRunStep extends Step implements Serializable {
         }
         if (partitionIndex != null) {
             c.setPartitionIndex(partitionIndex);
+        }
+        if (partitionTotal != null) {
+            c.setPartitionTotal(partitionTotal);
         }
     }
 

@@ -47,6 +47,7 @@ class SentinelRunStepTest {
         assertThat(step.getWorkspace()).isNull();
         assertThat(step.getSourceDir()).isNull();
         assertThat(step.getSentinelPath()).isNull();
+        assertThat(step.getPartitionTotal()).isNull();
     }
 
     @Test
@@ -54,6 +55,39 @@ class SentinelRunStepTest {
         final SentinelRunStep step = new SentinelRunStep();
         step.setPartitionIndex(3);
         assertThat(step.getPartitionIndex()).isEqualTo(3);
+    }
+
+    @Test
+    void partitionTotalSetter() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionTotal(4);
+        assertThat(step.getPartitionTotal()).isEqualTo(4);
+    }
+
+    @Test
+    void partitionTotalParamOverridesEnvVar() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionIndex(2);
+        step.setPartitionTotal(8);
+
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_PARTITION_TOTAL, "4");
+
+        final SentinelConfiguration config = step.toConfiguration(env);
+        assertThat(config.getPartitionTotal()).isEqualTo(8);
+        assertThat(config.getPartitionSpec()).isEqualTo("2/8");
+    }
+
+    @Test
+    void partitionTotalParamWorksWithoutEnvVar() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionIndex(1);
+        step.setPartitionTotal(3);
+
+        final SentinelConfiguration config =
+                step.toConfiguration(Map.of());
+        assertThat(config.getPartitionTotal()).isEqualTo(3);
+        assertThat(config.getPartitionSpec()).isEqualTo("1/3");
     }
 
     @Test
