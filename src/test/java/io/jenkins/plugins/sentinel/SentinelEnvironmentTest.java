@@ -6,6 +6,7 @@
 package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -153,6 +154,30 @@ class SentinelEnvironmentTest {
         assertThat(config.getTimeout()).isNull();
         assertThat(config.getSeed()).isNull();
         assertThat(config.getPartitionTotal()).isNull();
+    }
+
+    @Test
+    void invalidIntegerEnvVarFailsWithVariableName() {
+        final Map<String, String> env = new HashMap<>(requiredEnv());
+        env.put("SENTINEL_TIMEOUT", "2h");
+
+        assertThatThrownBy(() ->
+                SentinelEnvironment.toConfiguration(env))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SENTINEL_TIMEOUT")
+                .hasMessageContaining("2h");
+    }
+
+    @Test
+    void invalidSeedEnvVarFailsWithVariableName() {
+        final Map<String, String> env = new HashMap<>(requiredEnv());
+        env.put("SENTINEL_SEED", "xyz");
+
+        assertThatThrownBy(() ->
+                SentinelEnvironment.toConfiguration(env))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SENTINEL_SEED")
+                .hasMessageContaining("xyz");
     }
 
     @Test

@@ -115,12 +115,14 @@ public final class SentinelEnvironment {
         c.setOutputDir(env.get(OUTPUT_DIR));
         c.setSentinelPath(env.get(PATH));
 
-        c.setTimeout(parseInteger(env.get(TIMEOUT)));
-        c.setMutantsPerLine(parseInteger(env.get(MUTANTS_PER_LINE)));
-        c.setLimit(parseInteger(env.get(LIMIT)));
-        c.setPartitionTotal(parseInteger(env.get(PARTITION_TOTAL)));
+        c.setTimeout(parseInteger(TIMEOUT, env.get(TIMEOUT)));
+        c.setMutantsPerLine(
+                parseInteger(MUTANTS_PER_LINE, env.get(MUTANTS_PER_LINE)));
+        c.setLimit(parseInteger(LIMIT, env.get(LIMIT)));
+        c.setPartitionTotal(
+                parseInteger(PARTITION_TOTAL, env.get(PARTITION_TOTAL)));
 
-        c.setSeed(parseLong(env.get(SEED)));
+        c.setSeed(parseLong(SEED, env.get(SEED)));
 
         c.setUncommitted(parseBoolean(env.get(UNCOMMITTED)));
         c.setClean(parseBoolean(env.get(CLEAN)));
@@ -155,18 +157,29 @@ public final class SentinelEnvironment {
         return PARTITION_PREFIX + index;
     }
 
-    private static Integer parseInteger(final String value) {
+    private static Integer parseInteger(final String name,
+                                        final String value) {
         if (value == null || value.isEmpty()) {
             return null;
         }
-        return Integer.parseInt(value);
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    name + " must be an integer, got: '" + value + "'", e);
+        }
     }
 
-    private static Long parseLong(final String value) {
+    private static Long parseLong(final String name, final String value) {
         if (value == null || value.isEmpty()) {
             return null;
         }
-        return Long.parseLong(value);
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    name + " must be an integer, got: '" + value + "'", e);
+        }
     }
 
     private static boolean parseBoolean(final String value) {
