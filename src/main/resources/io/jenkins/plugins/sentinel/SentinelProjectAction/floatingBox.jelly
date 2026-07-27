@@ -1,98 +1,24 @@
 <?jelly escape-by-default='true'?>
+<!--
+  Rendered on the job page via the projectActionFloatingBox taglib,
+  which includes this view with st:include from="..." WITHOUT setting
+  "it" - so "it" is the Job here. The action must be referenced via
+  the "from" (or "action") variable.
+-->
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler">
   <script src="${rootURL}/plugin/echarts-api/js/echarts.min.js"
           type="text/javascript"></script>
+  <st:adjunct includes="io.jenkins.plugins.sentinel.charts"/>
 
   <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
     <h3 style="font-size:14px;color:#333;margin:0 0 12px 0;">Sentinel Trend Report</h3>
+    <!-- resize:both lets the user drag the corner; charts.js follows
+         via ResizeObserver and remembers the size per job. The height
+         must clear the legend that trendOption renders below the
+         grid, so keep it in step with that function's compact grid. -->
     <div id="sentinel-trend-chart"
-         data-trend="${it.trendDataJson}"
-         style="width:100%;height:250px;">
+         data-trend="${from.trendDataJson}"
+         style="width:500px;height:280px;resize:both;overflow:hidden;">
     </div>
   </div>
-
-  <script type="text/javascript">
-    function sentinelInitTrend() {
-      if (typeof echarts === 'undefined') {
-        setTimeout(sentinelInitTrend, 500);
-        return;
-      }
-      var chartEl = document.getElementById('sentinel-trend-chart');
-      if (!chartEl) { return; }
-
-      var trendData = JSON.parse(chartEl.getAttribute('data-trend'));
-      if (!trendData || trendData.length === 0) { return; }
-
-      var builds = [];
-      var scores = [];
-      var killed = [];
-      var survived = [];
-      var skipped = [];
-
-      for (var i = 0; i &lt; trendData.length; i++) {
-        var d = trendData[i];
-        builds.push('#' + d.buildNumber);
-        scores.push(d.score);
-        killed.push(d.killed);
-        survived.push(d.survived);
-        skipped.push(d.skipped);
-      }
-
-      var chart = echarts.init(chartEl);
-      chart.setOption({
-        tooltip: {
-          trigger: 'axis',
-          formatter: function(params) {
-            var idx = params[0].dataIndex;
-            return params[0].axisValue
-              + '&lt;br/&gt;Score: &lt;b&gt;' + scores[idx].toFixed(1) + '%&lt;/b&gt;'
-              + '&lt;br/&gt;Killed: ' + killed[idx]
-              + '&lt;br/&gt;Survived: ' + survived[idx]
-              + '&lt;br/&gt;Skipped: ' + skipped[idx];
-          }
-        },
-        grid: { left: 50, right: 16, top: 16, bottom: 30 },
-        xAxis: {
-          type: 'category',
-          data: builds,
-          axisLabel: { fontSize: 11, color: '#6b7280' },
-          axisLine: { lineStyle: { color: '#e5e7eb' } }
-        },
-        yAxis: {
-          type: 'value',
-          min: 0,
-          max: 100,
-          axisLabel: { fontSize: 11, color: '#6b7280', formatter: '{value}%' },
-          splitLine: { lineStyle: { color: '#f3f4f6' } }
-        },
-        series: [{
-          type: 'line',
-          data: scores,
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 6,
-          lineStyle: { color: '#1ea64b', width: 2 },
-          itemStyle: { color: '#1ea64b' },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(30,166,75,0.25)' },
-                { offset: 1, color: 'rgba(30,166,75,0.02)' }
-              ]
-            }
-          }
-        }]
-      });
-
-      window.addEventListener('resize', function() { chart.resize(); });
-    }
-
-    if (document.readyState === 'complete') {
-      sentinelInitTrend();
-    } else {
-      window.addEventListener('load', sentinelInitTrend);
-    }
-  </script>
 </j:jelly>
