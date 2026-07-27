@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.kohsuke.stapler.StaplerRequest2;
 import org.kohsuke.stapler.StaplerResponse2;
+import org.mockito.ArgumentCaptor;
 
 class SentinelBuildActionTest {
 
@@ -44,6 +45,10 @@ class SentinelBuildActionTest {
     private static final int LINE_30 = 30;
     private static final String MUTATOR_AOR = "AOR";
     private static final String MUTATOR_ROR = "ROR";
+    private static final String CSP_HEADER = "Content-Security-Policy";
+    private static final String CSP_PROPERTY =
+            "io.jenkins.plugins.sentinel.reportCsp";
+    private static final String CUSTOM_CSP = "default-src 'none'";
 
     @Test
     void formattedScoreReturnsOneDecimalPlace() {
@@ -169,6 +174,16 @@ class SentinelBuildActionTest {
     }
 
     @Test
+    void scoreDistributionJsonContainsAllStatuses() {
+        final SentinelBuildAction action = createAction(
+                KILLED_80, SURVIVED_20, SKIPPED_5);
+        final String json = action.getScoreDistributionJson();
+        assertThat(json).contains("\"Killed\"").contains("80");
+        assertThat(json).contains("\"Survived\"").contains("20");
+        assertThat(json).contains("\"Skipped\"").contains("5");
+    }
+
+    @Test
     void fileCountReturnsNumberOfFileResults() {
         final List<FileMutationResult> files = List.of(
                 new FileMutationResult("Foo.java", new MutationScore(1, 0, 0)),
@@ -206,53 +221,68 @@ class SentinelBuildActionTest {
     }
 
     @Test
-    void doDynamicSetsContentSecurityPolicyHeader(
+    void doDynamicServesArchivedReport(
             @TempDir final Path tempDir) throws Exception {
-        final Path archive = tempDir.resolve(
-                SentinelEnvironment.ARCHIVE_DIR);
-        Files.createDirectories(archive);
-        Files.writeString(
-                archive.resolve(SentinelEnvironment.HTML_REPORT_FILE),
-                "<html>report</html>");
-
-        final SentinelBuildAction action = createAction(1, 0, 0);
-        final Run<?, ?> run = mock(Run.class);
-        when(run.getRootDir()).thenReturn(tempDir.toFile());
-        action.setRun(run);
-
-        final StaplerRequest2 req = mock(StaplerRequest2.class);
-        final StaplerResponse2 rsp = mock(StaplerResponse2.class);
+        final SentinelBuildAction action =
+                actionWithArchivedReport(tempDir);
         final ByteArrayOutputStream body = new ByteArrayOutputStream();
-        when(rsp.getOutputStream())
-                .thenReturn(new CapturingServletOutputStream(body));
+        final StaplerResponse2 rsp = mockResponse(body);
 
-        action.doDynamic(req, rsp);
+        action.doDynamic(mock(StaplerRequest2.class), rsp);
 
-        verify(rsp).setHeader(
-                eq("Content-Security-Policy"), anyString());
+        verify(rsp).setHeader(eq(CSP_HEADER), anyString());
         assertThat(body.toString(StandardCharsets.UTF_8))
                 .contains("report");
+    }
+
+    @Test
+    void doDynamicDefaultCspSandboxesWithoutSameOrigin(
+            @TempDir final Path tempDir) throws Exception {
+        final SentinelBuildAction action =
+                actionWithArchivedReport(tempDir);
+        final StaplerResponse2 rsp =
+                mockResponse(new ByteArrayOutputStream());
+
+        action.doDynamic(mock(StaplerRequest2.class), rsp);
+
+        // The report renders itself with inline JS, so scripts must
+        // run - but only in an opaque origin, isolated from Jenkins.
+        assertThat(capturedCsp(rsp))
+                .contains("allow-scripts")
+                .contains("script-src 'unsafe-inline'")
+                .contains("style-src 'unsafe-inline'")
+                .doesNotContain("allow-same-origin");
+    }
+
+    @Test
+    void doDynamicHonorsPluginCspProperty(
+            @TempDir final Path tempDir) throws Exception {
+        System.setProperty(CSP_PROPERTY, CUSTOM_CSP);
+        try {
+            final SentinelBuildAction action =
+                    actionWithArchivedReport(tempDir);
+            final StaplerResponse2 rsp =
+                    mockResponse(new ByteArrayOutputStream());
+
+            action.doDynamic(mock(StaplerRequest2.class), rsp);
+
+            assertThat(capturedCsp(rsp)).isEqualTo(CUSTOM_CSP);
+        } finally {
+            System.clearProperty(CSP_PROPERTY);
+        }
     }
 
     @Test
     void doDynamicSends404WhenReportMissing(
             @TempDir final Path tempDir) throws Exception {
         // run set, but no archived report file exists
-        final SentinelBuildAction action = createAction(1, 0, 0);
-        final Run<?, ?> run = mock(Run.class);
-        when(run.getRootDir()).thenReturn(tempDir.toFile());
-        action.setRun(run);
+        final SentinelBuildAction action = actionForRootDir(tempDir);
+        final StaplerResponse2 rsp =
+                mockResponse(new ByteArrayOutputStream());
 
-        final StaplerRequest2 req = mock(StaplerRequest2.class);
-        final StaplerResponse2 rsp = mock(StaplerResponse2.class);
-        when(rsp.getOutputStream())
-                .thenReturn(new CapturingServletOutputStream(
-                        new ByteArrayOutputStream()));
+        action.doDynamic(mock(StaplerRequest2.class), rsp);
 
-        action.doDynamic(req, rsp);
-
-        verify(rsp).setHeader(
-                eq("Content-Security-Policy"), anyString());
+        verify(rsp).setHeader(eq(CSP_HEADER), anyString());
         verify(rsp).sendError(
                 eq(StaplerResponse2.SC_NOT_FOUND), anyString());
     }
@@ -269,6 +299,42 @@ class SentinelBuildActionTest {
 
         verify(rsp).sendError(
                 eq(StaplerResponse2.SC_NOT_FOUND), anyString());
+    }
+
+    /** Action whose build root dir holds an archived HTML report. */
+    private SentinelBuildAction actionWithArchivedReport(final Path tempDir)
+            throws IOException {
+        final Path archive = tempDir.resolve(
+                SentinelEnvironment.ARCHIVE_DIR);
+        Files.createDirectories(archive);
+        Files.writeString(
+                archive.resolve(SentinelEnvironment.HTML_REPORT_FILE),
+                "<html>report</html>");
+        return actionForRootDir(tempDir);
+    }
+
+    /** Action attached to a build whose root dir is {@code tempDir}. */
+    private SentinelBuildAction actionForRootDir(final Path tempDir) {
+        final SentinelBuildAction action = createAction(1, 0, 0);
+        final Run<?, ?> run = mock(Run.class);
+        when(run.getRootDir()).thenReturn(tempDir.toFile());
+        action.setRun(run);
+        return action;
+    }
+
+    private static StaplerResponse2 mockResponse(final OutputStream body)
+            throws IOException {
+        final StaplerResponse2 rsp = mock(StaplerResponse2.class);
+        when(rsp.getOutputStream())
+                .thenReturn(new CapturingServletOutputStream(body));
+        return rsp;
+    }
+
+    private static String capturedCsp(final StaplerResponse2 rsp) {
+        final ArgumentCaptor<String> csp =
+                ArgumentCaptor.forClass(String.class);
+        verify(rsp).setHeader(eq(CSP_HEADER), csp.capture());
+        return csp.getValue();
     }
 
     private static final class CapturingServletOutputStream

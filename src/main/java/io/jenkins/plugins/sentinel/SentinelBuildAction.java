@@ -12,7 +12,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import hudson.model.DirectoryBrowserSupport;
 import hudson.model.Run;
 import io.jenkins.plugins.sentinel.model.MutationEntry;
 import io.jenkins.plugins.sentinel.model.MutationScore;
@@ -39,10 +38,32 @@ public class SentinelBuildAction implements RunAction2 {
      */
     private static final String CSP_PROPERTY =
             "hudson.model.DirectoryBrowserSupport.CSP";
-    /** Score threshold for green color (80% or above). */
-    private static final double GREEN_THRESHOLD = 80.0;
-    /** Score threshold for orange color (50% or above). */
-    private static final double ORANGE_THRESHOLD = 50.0;
+    /**
+     * Plugin-scoped system property that overrides {@link #REPORT_CSP}.
+     * Checked before {@link #CSP_PROPERTY} so that tightening the
+     * Jenkins-wide policy for workspace browsing does not silently
+     * blank this report, while an administrator who wants one policy
+     * everywhere can still set only the Jenkins-wide property.
+     */
+    private static final String SENTINEL_CSP_PROPERTY =
+            "io.jenkins.plugins.sentinel.reportCsp";
+    /**
+     * Default Content-Security-Policy for the served HTML report.
+     *
+     * <p>The sentinel report is a self-contained HTML file that renders
+     * its entire content with inline JavaScript, so inline scripts and
+     * styles must be allowed or the page stays blank. {@code sandbox}
+     * <em>without</em> {@code allow-same-origin} runs the report in an
+     * opaque origin: its scripts cannot reach Jenkins cookies, DOM, or
+     * APIs. This is deliberately more permissive than
+     * {@code DirectoryBrowserSupport.DEFAULT_CSP_VALUE}, which targets
+     * arbitrary workspace files.</p>
+     */
+    private static final String REPORT_CSP =
+            "sandbox allow-scripts; default-src 'none'; "
+                    + "img-src 'self' data:; "
+                    + "style-src 'unsafe-inline'; "
+                    + "script-src 'unsafe-inline';";
     /** Multiplier for percent calculation. */
     private static final int PERCENT = 100;
 
@@ -125,24 +146,17 @@ public class SentinelBuildAction implements RunAction2 {
      * @return formatted score string
      */
     public String getFormattedScore() {
-        return String.format("%.1f", result.overallScore().score());
+        return result.overallScore().formattedScore();
     }
 
     /**
-     * Returns a CSS color for the score.
-     * Green if &gt;= 80, orange if &gt;= 50, red otherwise.
+     * Returns a CSS color for the overall score band.
      *
      * @return hex color string
+     * @see MutationScore#scoreColor()
      */
     public String getScoreColor() {
-        final double score = result.overallScore().score();
-        if (score >= GREEN_THRESHOLD) {
-            return "#1ea64b";
-        }
-        if (score >= ORANGE_THRESHOLD) {
-            return "#fe820a";
-        }
-        return "#e6001f";
+        return result.overallScore().scoreColor();
     }
 
     /**
@@ -198,11 +212,13 @@ public class SentinelBuildAction implements RunAction2 {
     /**
      * Serves the archived HTML report file.
      *
-     * <p>Applies the same Content-Security-Policy that Jenkins uses for
-     * browsed workspace/artifact files, so the report (which embeds
-     * source code) cannot run scripts in the Jenkins origin. The policy
-     * honors the {@code hudson.model.DirectoryBrowserSupport.CSP}
-     * system property override.</p>
+     * <p>Applies a sandboxing Content-Security-Policy that lets the
+     * report render itself with its inline scripts and styles while
+     * isolating it in an opaque origin (see {@link #REPORT_CSP}). The
+     * policy can be overridden with the
+     * {@code io.jenkins.plugins.sentinel.reportCsp} system property, or
+     * Jenkins-wide with
+     * {@code hudson.model.DirectoryBrowserSupport.CSP}.</p>
      *
      * @param req  stapler request
      * @param rsp  stapler response
@@ -233,11 +249,11 @@ public class SentinelBuildAction implements RunAction2 {
 
     private static void applyContentSecurityPolicy(
             final StaplerResponse2 rsp) {
-        // DEFAULT_CSP_VALUE is a non-null constant, so the property
-        // lookup never returns null; an explicitly empty value disables CSP.
+        // REPORT_CSP is a non-null constant, so neither lookup returns
+        // null; an explicitly empty value disables CSP.
         final String csp = System.getProperty(
-                CSP_PROPERTY,
-                DirectoryBrowserSupport.DEFAULT_CSP_VALUE);
+                SENTINEL_CSP_PROPERTY,
+                System.getProperty(CSP_PROPERTY, REPORT_CSP));
         if (!csp.isEmpty()) {
             rsp.setHeader("Content-Security-Policy", csp);
             rsp.setHeader("X-WebKit-CSP", csp);
@@ -282,12 +298,32 @@ public class SentinelBuildAction implements RunAction2 {
         final JSONArray array = new JSONArray();
         for (final Map.Entry<String, Integer> entry
                 : getMutatorDistribution().entrySet()) {
-            final JSONObject obj = new JSONObject();
-            obj.put("name", entry.getKey());
-            obj.put("value", entry.getValue());
-            array.add(obj);
+            array.add(distEntry(entry.getKey(), entry.getValue()));
         }
         return array.toString();
+    }
+
+    /**
+     * Returns the killed/survived/skipped counts as a JSON array
+     * string for the score distribution donut chart.
+     * Format: {@code [{"name":"Killed","value":42}, ...]}
+     *
+     * @return JSON array string
+     */
+    public String getScoreDistributionJson() {
+        final MutationScore score = result.overallScore();
+        final JSONArray array = new JSONArray();
+        array.add(distEntry("Killed", score.killed()));
+        array.add(distEntry("Survived", score.survived()));
+        array.add(distEntry("Skipped", score.skipped()));
+        return array.toString();
+    }
+
+    private static JSONObject distEntry(final String name, final int value) {
+        final JSONObject obj = new JSONObject();
+        obj.put("name", name);
+        obj.put("value", value);
+        return obj;
     }
 
     /**
