@@ -275,12 +275,12 @@ After a mutation test run completes, the plugin provides:
 
 - **Build page summary** — a compact card on the build page showing overall mutation score with a stacked bar (killed/survived/skipped)
 - **Mutation Report** — a detailed tabbed report page accessible via the build sidebar:
-  - **Overview** tab: mutator type distribution (donut chart)
+  - **Overview** tab: score distribution (killed/survived/skipped) and mutator type distribution (donut charts)
   - **Files** tab: per-file scores with inline progress bars
-  - **Mutations** tab: full mutation detail table with status/file filtering
-- **Mutation Score Trend** — a line chart on the project page sidebar showing score progression over recent builds
+  - **Mutations** tab: full mutation detail table with status/file filtering; the **Reason** column shows the killing test for killed mutations, or why a skipped mutation could not be evaluated
+- **Mutation Score Trend** — a chart on the project page showing killed/survived/skipped counts as stacked bars per build, with the mutation score overlaid as a line on a second axis. The same chart appears in compact form on the job page (drag its bottom-right corner to resize; the chosen size is remembered per job in your browser) and full size under **Sentinel Trend Report**. The trend stays available as long as any of the last 25 builds has results, even if the most recent build failed before reaching `sentinelReport`.
 
-All charts are rendered using [ECharts](https://echarts.apache.org/) via the Jenkins echarts-api plugin.
+All charts are rendered using [ECharts](https://echarts.apache.org/) via the Jenkins echarts-api plugin. The report pages contain no inline JavaScript, so they render correctly on Jenkins instances that enforce a `script-src 'self'` Content-Security-Policy on UI pages (as recent Jenkins releases do).
 
 ### Mutation status
 
@@ -294,7 +294,16 @@ The mutation score is `killed / (killed + survived) × 100`. **SKIPPED mutations
 
 ### HTML report and Content-Security-Policy
 
-The **View HTML Report** link serves sentinel's generated HTML from the build's archived report directory. It is served under the same Content-Security-Policy that Jenkins applies to browsed workspace and artifact files, which by default blocks inline scripts and styles. If your sentinel HTML report renders incorrectly because of this, relax it via the standard `hudson.model.DirectoryBrowserSupport.CSP` system property (the same property used by other report-publishing plugins).
+The **View HTML Report** link serves sentinel's generated HTML from the build's archived report directory. The sentinel report is a self-contained page that renders itself with inline JavaScript, so the plugin serves it under a sandboxing Content-Security-Policy that allows the report's own inline scripts and styles while isolating the page in an opaque origin (`sandbox` without `allow-same-origin`) — the report cannot access Jenkins cookies, APIs, or the parent page.
+
+To use a different policy, set one of these system properties (the first that is set wins):
+
+| System property | Scope |
+|-----------------|-------|
+| `io.jenkins.plugins.sentinel.reportCsp` | This report only |
+| `hudson.model.DirectoryBrowserSupport.CSP` | Jenkins-wide, shared with workspace/artifact browsing |
+
+Setting an empty value disables the header entirely. Use the plugin-scoped property when you want to tighten the Jenkins-wide policy without blanking this report.
 
 ## Global Configuration
 

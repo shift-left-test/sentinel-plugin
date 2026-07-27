@@ -118,7 +118,10 @@ io.jenkins.plugins.sentinel
 - `listener.getLogger()` is standard Jenkins logging pattern
 - `TransientActionFactory` for project-level actions (no manual registration needed)
 - `RunAction2` for build actions that need persisted `Run` reference
-- ECharts charts: pass JSON via `data-*` attributes, load via `<st:adjunct includes="io.jenkins.plugins.echarts"/>`
+- ECharts charts: pass JSON via `data-*` attributes; load the library via `<script src="${rootURL}/plugin/echarts-api/js/echarts.min.js"/>` (echarts-api ships no `io.jenkins.plugins.echarts` adjunct)
+- No inline `<script>` or inline event handlers in Jelly — Jenkins enforces CSP `script-src 'self'` on plugin views; all client JS lives in the `io.jenkins.plugins.sentinel.charts` adjunct
+- In `floatingBox.jelly`, `it` is the Job, not the action (core taglib includes it via `st:include from=` only) — reference the action as `${from}`; `summary.jelly` does get `it` = action
+- No `String.format(...)` in Jelly — JEXL cannot call static methods and silently renders empty; format in Java getters (e.g. `MutationScore.formattedScore()`)
 
 ## PMD/SpotBugs Exclusion Rationale
 
