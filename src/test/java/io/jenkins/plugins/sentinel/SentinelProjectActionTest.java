@@ -7,6 +7,8 @@ package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -38,7 +40,7 @@ class SentinelProjectActionTest {
                 KILLED_18, SURVIVED_2, SKIPPED_1, null);
         final Run<?, ?> build1 = mockBuild(BUILD_1,
                 KILLED_12, SURVIVED_8, SKIPPED_2, build2);
-        when(job.getLastBuild()).thenReturn((Run) build1);
+        when(job.getLastCompletedBuild()).thenReturn((Run) build1);
 
         final SentinelProjectAction action = new SentinelProjectAction(job);
         final String json = action.getTrendDataJson();
@@ -54,7 +56,7 @@ class SentinelProjectActionTest {
                 KILLED_18, SURVIVED_2, SKIPPED_1, null);
         final Run<?, ?> build1 = mockBuild(BUILD_1,
                 KILLED_12, SURVIVED_8, SKIPPED_2, build2);
-        when(job.getLastBuild()).thenReturn((Run) build1);
+        when(job.getLastCompletedBuild()).thenReturn((Run) build1);
 
         final SentinelProjectAction action = new SentinelProjectAction(job);
         final String json = action.getTrendDataJson();
@@ -69,7 +71,7 @@ class SentinelProjectActionTest {
     @Test
     void trendDataEmptyWhenNoBuilds() {
         final Job<?, ?> job = mock(Job.class);
-        when(job.getLastBuild()).thenReturn(null);
+        when(job.getLastCompletedBuild()).thenReturn(null);
 
         final SentinelProjectAction action = new SentinelProjectAction(job);
         assertThat(action.getTrendDataJson()).isEqualTo("[]");
@@ -85,7 +87,7 @@ class SentinelProjectActionTest {
 
         final Run<?, ?> buildWith = mockBuild(BUILD_1,
                 KILLED_12, SURVIVED_8, SKIPPED_2, buildWithout);
-        when(job.getLastBuild()).thenReturn((Run) buildWith);
+        when(job.getLastCompletedBuild()).thenReturn((Run) buildWith);
 
         final SentinelProjectAction action = new SentinelProjectAction(job);
         final String json = action.getTrendDataJson();
@@ -94,6 +96,21 @@ class SentinelProjectActionTest {
         assertThat(array.size()).isEqualTo(1);
         assertThat(array.getJSONObject(0).getInt("buildNumber"))
                 .isEqualTo(BUILD_1);
+    }
+
+    @Test
+    void trendDataIsMemoizedUntilNextCompletedBuild() {
+        final Job<?, ?> job = mock(Job.class);
+        final Run<?, ?> build = mockBuild(BUILD_1,
+                KILLED_12, SURVIVED_8, SKIPPED_2, null);
+        when(job.getLastCompletedBuild()).thenReturn((Run) build);
+
+        final SentinelProjectAction action = new SentinelProjectAction(job);
+        assertThat(action.getTrendDataJson())
+                .isEqualTo(action.getTrendDataJson());
+
+        // Second call must hit the cache, not walk the history again.
+        verify(build, times(1)).getAction(SentinelBuildAction.class);
     }
 
     @Test

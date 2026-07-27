@@ -7,6 +7,8 @@ package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Collection;
@@ -19,20 +21,16 @@ import io.jenkins.plugins.sentinel.model.MutationScore;
 import io.jenkins.plugins.sentinel.model.SentinelResult;
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings("unchecked")
 class SentinelProjectActionFactoryTest {
 
     @Test
-    @SuppressWarnings("unchecked")
     void createsActionWhenBuildHasSentinelAction() {
         final Job<?, ?> job = mock(Job.class);
         final Run<?, ?> build = mock(Run.class);
         when(job.getLastCompletedBuild()).thenReturn((Run) build);
-
-        final MutationScore score = new MutationScore(1, 0, 0);
-        final SentinelResult result = new SentinelResult(
-                score, List.of(), List.of());
-        final SentinelBuildAction buildAction = new SentinelBuildAction(result);
-        when(build.getAction(SentinelBuildAction.class)).thenReturn(buildAction);
+        when(build.getAction(SentinelBuildAction.class))
+                .thenReturn(newBuildAction());
 
         final SentinelProjectActionFactory factory =
                 new SentinelProjectActionFactory();
@@ -44,7 +42,6 @@ class SentinelProjectActionFactoryTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void returnsEmptyWhenNoBuildHasSentinelAction() {
         final Job<?, ?> job = mock(Job.class);
         final Run<?, ?> build = mock(Run.class);
@@ -56,6 +53,43 @@ class SentinelProjectActionFactoryTest {
         final Collection<? extends Action> actions = factory.createFor(job);
 
         assertThat(actions).isEmpty();
+    }
+
+    @Test
+    void createsActionWhenOlderBuildHasSentinelAction() {
+        final Job<?, ?> job = mock(Job.class);
+        final Run<?, ?> last = mock(Run.class);
+        final Run<?, ?> older = mock(Run.class);
+        when(job.getLastCompletedBuild()).thenReturn((Run) last);
+        when(last.getAction(SentinelBuildAction.class)).thenReturn(null);
+        when(last.getPreviousBuild()).thenReturn((Run) older);
+        when(older.getAction(SentinelBuildAction.class))
+                .thenReturn(newBuildAction());
+
+        final SentinelProjectActionFactory factory =
+                new SentinelProjectActionFactory();
+        final Collection<? extends Action> actions = factory.createFor(job);
+
+        assertThat(actions).hasSize(1);
+        assertThat(actions.iterator().next())
+                .isInstanceOf(SentinelProjectAction.class);
+    }
+
+    @Test
+    void cachesDecisionUntilNextCompletedBuild() {
+        final Job<?, ?> job = mock(Job.class);
+        final Run<?, ?> build = mock(Run.class);
+        when(job.getLastCompletedBuild()).thenReturn((Run) build);
+        when(build.getAction(SentinelBuildAction.class))
+                .thenReturn(newBuildAction());
+
+        final SentinelProjectActionFactory factory =
+                new SentinelProjectActionFactory();
+        assertThat(factory.createFor(job)).hasSize(1);
+        assertThat(factory.createFor(job)).hasSize(1);
+
+        // Second call must hit the cache, not walk the history again.
+        verify(build, times(1)).getAction(SentinelBuildAction.class);
     }
 
     @Test
@@ -75,5 +109,12 @@ class SentinelProjectActionFactoryTest {
         final SentinelProjectActionFactory factory =
                 new SentinelProjectActionFactory();
         assertThat(factory.type()).isEqualTo(Job.class);
+    }
+
+    private static SentinelBuildAction newBuildAction() {
+        final MutationScore score = new MutationScore(1, 0, 0);
+        final SentinelResult result = new SentinelResult(
+                score, List.of(), List.of());
+        return new SentinelBuildAction(result);
     }
 }

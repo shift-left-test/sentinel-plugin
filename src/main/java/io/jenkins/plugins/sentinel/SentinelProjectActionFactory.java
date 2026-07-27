@@ -13,16 +13,18 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.model.Action;
 import hudson.model.Job;
-import hudson.model.Run;
 import jenkins.model.TransientActionFactory;
 
 /**
  * Factory that automatically attaches {@link SentinelProjectAction}
  * to jobs that have builds with mutation testing results.
  *
- * <p>Jenkins calls {@link #createFor(Job)} for each job. If the
- * last completed build has a {@link SentinelBuildAction}, the
- * factory returns a {@link SentinelProjectAction} for the job.</p>
+ * <p>Jenkins calls {@link #createFor(Job)} for each job. The action is
+ * attached exactly when the trend window
+ * ({@link SentinelProjectAction#hasTrendData(Job)}) holds results, so
+ * the trend stays available even when the most recent build failed
+ * before reaching {@code sentinelReport}. That check is memoized per
+ * completed build, since this runs on every job page render.</p>
  */
 
 @Extension
@@ -40,17 +42,9 @@ public class SentinelProjectActionFactory
     @NonNull
     public Collection<? extends Action> createFor(
             @NonNull final Job target) {
-        final Run<?, ?> lastBuild = target.getLastCompletedBuild();
-        if (lastBuild == null) {
+        if (!SentinelProjectAction.hasTrendData(target)) {
             return Collections.emptyList();
         }
-
-        final SentinelBuildAction action =
-                lastBuild.getAction(SentinelBuildAction.class);
-        if (action == null) {
-            return Collections.emptyList();
-        }
-
         return List.of(new SentinelProjectAction(target));
     }
 }
