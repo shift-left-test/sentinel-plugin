@@ -55,6 +55,36 @@ class MutationScoreTest {
     }
 
     @Test
+    void formattedScoreHasOneDecimal() {
+        // 42 / (42 + 21) * 100 = 66.666...
+        final MutationScore score = new MutationScore(42, 21, 14);
+        assertThat(score.formattedScore()).isEqualTo("66.7");
+    }
+
+    @Test
+    void wholePercentRoundsToInteger() {
+        final MutationScore score = new MutationScore(42, 21, 14);
+        assertThat(score.wholePercent()).isEqualTo("67");
+    }
+
+    @Test
+    void formattedScoreOfZeroTotal() {
+        final MutationScore score = new MutationScore(0, 0, 5);
+        assertThat(score.formattedScore()).isEqualTo("0.0");
+        assertThat(score.wholePercent()).isEqualTo("0");
+    }
+
+    @Test
+    void scoreColorBands() {
+        assertThat(new MutationScore(80, 20, 0).scoreColor())
+                .isEqualTo("#1ea64b");
+        assertThat(new MutationScore(50, 50, 0).scoreColor())
+                .isEqualTo("#fe820a");
+        assertThat(new MutationScore(49, 51, 0).scoreColor())
+                .isEqualTo("#e6001f");
+    }
+
+    @Test
     void toStringContainsScore() {
         final MutationScore score = new MutationScore(80, 20, 0);
         assertThat(score.toString()).contains("80.0");

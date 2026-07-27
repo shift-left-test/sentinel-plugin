@@ -6,6 +6,7 @@
 package io.jenkins.plugins.sentinel.model;
 
 import java.io.Serializable;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -20,6 +21,10 @@ public final class MutationScore implements Serializable {
 
     private static final long serialVersionUID = 1L;
     private static final double HUNDRED = 100.0;
+    /** Score threshold for the green band (80% or above). */
+    private static final double GREEN_THRESHOLD = 80.0;
+    /** Score threshold for the orange band (50% or above). */
+    private static final double ORANGE_THRESHOLD = 50.0;
 
     private final int killedCount;
     private final int survivedCount;
@@ -92,6 +97,50 @@ public final class MutationScore implements Serializable {
     }
 
     /**
+     * Returns the score formatted to one decimal place, e.g. {@code "66.7"}.
+     *
+     * <p>Formatting is done in Java because Jelly's JEXL cannot invoke
+     * static methods like {@code String.format}. Uses {@link Locale#ROOT}
+     * so the decimal separator is always a period regardless of the
+     * server locale.</p>
+     *
+     * @return formatted score string
+     */
+    public String formattedScore() {
+        return String.format(Locale.ROOT, "%.1f", score());
+    }
+
+    /**
+     * Returns the score rounded to a whole percent, e.g. {@code "67"}.
+     * Suitable for CSS width values in score bars.
+     *
+     * @return whole-percent score string
+     */
+    public String wholePercent() {
+        return String.format(Locale.ROOT, "%.0f", score());
+    }
+
+    /**
+     * Returns a CSS color for this score's band: green for
+     * 80% or above, orange for 50% or above, red otherwise.
+     *
+     * <p>Single source of the score-to-color mapping used by all
+     * Jelly views (overall score and per-file rows).</p>
+     *
+     * @return hex color string
+     */
+    public String scoreColor() {
+        final double s = score();
+        if (s >= GREEN_THRESHOLD) {
+            return "#1ea64b";
+        }
+        if (s >= ORANGE_THRESHOLD) {
+            return "#fe820a";
+        }
+        return "#e6001f";
+    }
+
+    /**
      * Merges this score with another by summing counts.
      *
      * @param other the other score to merge with
@@ -124,10 +173,10 @@ public final class MutationScore implements Serializable {
 
     @Override
     public String toString() {
-        return String.format(
+        return String.format(Locale.ROOT,
                 "MutationScore{killed=%d, survived=%d, skipped=%d, "
-                        + "total=%d, score=%.1f%%}",
+                        + "total=%d, score=%s%%}",
                 killedCount, survivedCount, skippedCount,
-                total(), score());
+                total(), formattedScore());
     }
 }
