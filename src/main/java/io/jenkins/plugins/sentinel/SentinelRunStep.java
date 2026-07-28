@@ -5,6 +5,7 @@
 
 package io.jenkins.plugins.sentinel;
 
+import java.io.PrintStream;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
@@ -203,6 +204,29 @@ public class SentinelRunStep extends Step implements Serializable {
         }
     }
 
+    /**
+     * Fills in a derived per-build seed when neither the step
+     * parameter nor {@code SENTINEL_SEED} provided one, and logs the
+     * value so the build can be reproduced by pinning it. Partitions
+     * of the same build derive identical seeds, keeping the
+     * {@code --partition} split consistent.
+     *
+     * @param config configuration after env/param merging
+     * @param runId  externalizable run ID of the current build
+     * @param logger build log destination
+     */
+    void applySeedFallback(final SentinelConfiguration config,
+                           final String runId,
+                           final PrintStream logger) {
+        if (config.getSeed() != null) {
+            return;
+        }
+        final long generated = SentinelSeed.deriveFrom(runId);
+        config.setSeed(generated);
+        logger.println("[Sentinel] Using generated seed: " + generated
+                + " (set SENTINEL_SEED to pin this run)");
+    }
+
     @SuppressWarnings("PMD.NPathComplexity")
     private void applyOverrides(final SentinelConfiguration c) {
         if (buildCommand != null) {
@@ -280,6 +304,9 @@ public class SentinelRunStep extends Step implements Serializable {
 
             final SentinelConfiguration config =
                     step.toConfiguration(env);
+            step.applySeedFallback(config,
+                    build.getExternalizableId(),
+                    listener.getLogger());
             SentinelConfigValidator.validate(config);
             step.prepareManagedWorkspace(ws, env, listener);
 

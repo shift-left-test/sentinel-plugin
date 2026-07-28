@@ -92,6 +92,7 @@ io.jenkins.plugins.sentinel
 ├── SentinelRunStep                # sentinelRun step (env var config, auto-stash)
 ├── SentinelReportStep             # sentinelReport step (unstash, merge, report, threshold)
 ├── SentinelEnvironment            # SENTINEL_* env var mapping, naming conventions
+├── SentinelSeed                   # Per-build fallback seed derived from the run ID
 ├── SentinelCommandBuilder         # Builds sentinel CLI commands
 ├── SentinelRunner                 # Executes sentinel CLI via Jenkins launcher
 ├── SentinelPostProcessor          # Merge, report generation, threshold judgment
@@ -135,6 +136,10 @@ io.jenkins.plugins.sentinel
 - `SentinelConfiguration.getPartitionSpec()`: derives `"index/total"` string from `partitionIndex` + `partitionTotal`.
 - `SentinelEnvironment`: single source of truth for env var names, stash names, workspace paths.
 - MutationScore formula: `killed / (killed + survived) * 100` (skipped excluded from denominator)
+- Seed resolution: step param > `SENTINEL_SEED` > derived from
+  `Run.getExternalizableId()` via SHA-256 (`SentinelSeed`, range 0..2^32-1).
+  `sentinelRun` always ends up passing `--seed`; all partitions of a build
+  share the derived value.
 - Threshold is optional; if set, `thresholdAction` is required (paired validation)
 
 ## Docker

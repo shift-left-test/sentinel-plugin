@@ -9,6 +9,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,11 +32,13 @@ class SentinelRunStepTest {
     private static final String TEST_CMD = "make test";
     private static final String ENV_PARTITION_TOTAL =
             "SENTINEL_PARTITION_TOTAL";
+    private static final String ENV_SEED = "SENTINEL_SEED";
     private static final String TEST_RESULT = "test-results/";
     private static final long SEED_VALUE = 12_345L;
     private static final String CUSTOM_WORKSPACE = "custom-ws";
     private static final String STALE_FILE = "stale.txt";
     private static final String UTF_8 = "UTF-8";
+    private static final String RUN_ID = "my-job#42";
 
     @Test
     void noRequiredConstructorParams() {
@@ -107,7 +112,7 @@ class SentinelRunStepTest {
         env.put("SENTINEL_TEST_COMMAND", "env-test");
         env.put("SENTINEL_TEST_RESULT_DIR", "env-results/");
         env.put("SENTINEL_SOURCE_DIR", "env-src");
-        env.put("SENTINEL_SEED", "111");
+        env.put(ENV_SEED, "111");
         env.put("SENTINEL_VERBOSE", "false");
         env.put("SENTINEL_WORKSPACE", ".env-ws");
         env.put("SENTINEL_PATH", "/usr/bin/sentinel");
@@ -138,7 +143,7 @@ class SentinelRunStepTest {
         env.put("SENTINEL_TEST_COMMAND", TEST_CMD);
         env.put("SENTINEL_TEST_RESULT_DIR", TEST_RESULT);
         env.put("SENTINEL_SOURCE_DIR", "src");
-        env.put("SENTINEL_SEED", String.valueOf(SEED_VALUE));
+        env.put(ENV_SEED, String.valueOf(SEED_VALUE));
         env.put(ENV_PARTITION_TOTAL, "4");
 
         final SentinelConfiguration config =
@@ -160,7 +165,7 @@ class SentinelRunStepTest {
 
         final Map<String, String> env = new HashMap<>();
         env.put("SENTINEL_BUILD_COMMAND", BUILD_CMD);
-        env.put("SENTINEL_SEED", String.valueOf(SEED_VALUE));
+        env.put(ENV_SEED, String.valueOf(SEED_VALUE));
 
         final SentinelConfiguration config =
                 step.toConfiguration(env);
@@ -329,5 +334,54 @@ class SentinelRunStepTest {
                         TaskListener.class,
                         EnvVars.class,
                         Run.class));
+    }
+
+    @Test
+    void derivedSeedFillsWhenParamAndEnvUnset() {
+        final SentinelRunStep step = new SentinelRunStep();
+        final SentinelConfiguration config =
+                step.toConfiguration(Map.of());
+        final ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        step.applySeedFallback(config, RUN_ID,
+                new PrintStream(out, true, StandardCharsets.UTF_8));
+
+        final long expected = SentinelSeed.deriveFrom(RUN_ID);
+        assertThat(config.getSeed()).isEqualTo(expected);
+        assertThat(out.toString(StandardCharsets.UTF_8))
+                .contains("Using generated seed")
+                .contains(ENV_SEED)
+                .contains(String.valueOf(expected));
+    }
+
+    @Test
+    void stepParamSuppressesDerivedSeed() {
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setSeed(99L);
+        final SentinelConfiguration config =
+                step.toConfiguration(Map.of());
+        final ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        step.applySeedFallback(config, RUN_ID,
+                new PrintStream(out, true, StandardCharsets.UTF_8));
+
+        assertThat(config.getSeed()).isEqualTo(99L);
+        assertThat(out.toString(StandardCharsets.UTF_8)).isEmpty();
+    }
+
+    @Test
+    void envVarSuppressesDerivedSeed() {
+        final SentinelRunStep step = new SentinelRunStep();
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_SEED, String.valueOf(SEED_VALUE));
+        final SentinelConfiguration config =
+                step.toConfiguration(env);
+        final ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        step.applySeedFallback(config, RUN_ID,
+                new PrintStream(out, true, StandardCharsets.UTF_8));
+
+        assertThat(config.getSeed()).isEqualTo(SEED_VALUE);
+        assertThat(out.toString(StandardCharsets.UTF_8)).isEmpty();
     }
 }

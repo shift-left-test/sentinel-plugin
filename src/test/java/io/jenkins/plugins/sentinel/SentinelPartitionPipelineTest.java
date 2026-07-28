@@ -10,8 +10,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
 import org.jenkinsci.plugins.structs.describable.DescribableModel;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
@@ -64,14 +69,7 @@ class SentinelPartitionPipelineTest {
         final WorkflowJob job =
                 r.createProject(WorkflowJob.class, "range");
         job.setDefinition(new CpsFlowDefinition(pipelineScript(fake, "",
-                "    def n = 2\n"
-                + "    def branches = [:]\n"
-                + "    for (int i = 1; i <= n; i++) {\n"
-                + "      int idx = i\n"
-                + "      branches[\"P${idx}\"] = "
-                + "{ sentinelRun(partitionIndex: idx, partitionTotal: n) }\n"
-                + "    }\n"
-                + "    parallel branches\n"), true));
+                twoBranchParallelBody()), true));
         final WorkflowRun run = r.buildAndAssertSuccess(job);
         r.assertLogContains("--partition=1/2", run);
         r.assertLogContains("--partition=2/2", run);
@@ -104,6 +102,49 @@ class SentinelPartitionPipelineTest {
         r.assertLogContains("SENTINEL_TIMOUT", run);
     }
 
+    @Test
+    void parallelPartitionsShareDerivedSeed(final JenkinsRule r)
+            throws Exception {
+        final String fake = writeFakeSentinel(r);
+        final WorkflowJob job =
+                r.createProject(WorkflowJob.class, "sharedseed");
+        job.setDefinition(new CpsFlowDefinition(pipelineScript(fake, "",
+                twoBranchParallelBody()), true));
+        final WorkflowRun run = r.buildAndAssertSuccess(job);
+
+        final long expected =
+                SentinelSeed.deriveFrom(run.getExternalizableId());
+        final String log = r.getLog(run);
+        assertThat(StringUtils.countMatches(
+                log, "Using generated seed: " + expected))
+                .isEqualTo(2);
+
+        final Matcher m = Pattern.compile("--seed=(\\d+)").matcher(log);
+        final Set<String> seeds = new HashSet<>();
+        int occurrences = 0;
+        while (m.find()) {
+            seeds.add(m.group(1));
+            occurrences++;
+        }
+        assertThat(seeds)
+                .containsExactly(String.valueOf(expected));
+        assertThat(occurrences).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    void explicitSeedSuppressesDerivedSeed(final JenkinsRule r)
+            throws Exception {
+        final String fake = writeFakeSentinel(r);
+        final WorkflowJob job =
+                r.createProject(WorkflowJob.class, "pinnedseed");
+        job.setDefinition(new CpsFlowDefinition(
+                pipelineScript(fake, ", 'SENTINEL_SEED=12345'",
+                "    sentinelRun()\n"), true));
+        final WorkflowRun run = r.buildAndAssertSuccess(job);
+        r.assertLogContains("--seed=12345", run);
+        r.assertLogNotContains("Using generated seed", run);
+    }
+
     /**
      * Wraps a pipeline body in a {@code node { withEnv(...) { ... } }} block
      * with {@code SENTINEL_PATH} pointing at the fake sentinel, plus any
@@ -124,6 +165,24 @@ class SentinelPartitionPipelineTest {
                 + body
                 + "  }\n"
                 + "}\n";
+    }
+
+    /**
+     * Two-branch parallel body using the C-style loop recipe from the
+     * README (a Groovy IntRange cannot be serialized by the CPS
+     * engine, so the recipe must not use ranges).
+     *
+     * @return pipeline body running sentinelRun in two parallel branches
+     */
+    private static String twoBranchParallelBody() {
+        return "    def n = 2\n"
+                + "    def branches = [:]\n"
+                + "    for (int i = 1; i <= n; i++) {\n"
+                + "      int idx = i\n"
+                + "      branches[\"P${idx}\"] = "
+                + "{ sentinelRun(partitionIndex: idx, partitionTotal: n) }\n"
+                + "    }\n"
+                + "    parallel branches\n";
     }
 
     private static String writeFakeSentinel(final JenkinsRule r)

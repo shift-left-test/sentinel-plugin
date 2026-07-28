@@ -117,10 +117,12 @@ pipeline {
 - The Report stage needs `checkout scm` because sentinel embeds source code into
   the HTML report.
 - **Shared seed:** sentinel divides mutants by `--partition=i/n`, so every partition
-  must select mutants identically for the split to be consistent. Pin a fixed seed
-  shared by all partitions — e.g. a fixed `seed` in `sentinel.yaml`, or
-  `environment { SENTINEL_SEED = '...' }` (evaluated once, inherited by all stages).
-  Without a shared fixed seed the partitions can overlap or drop mutants.
+  must select mutants identically for the split to be consistent. The plugin
+  guarantees this automatically: when no seed is configured, every `sentinelRun`
+  in a build derives the same seed from the build's run ID and passes it as
+  `--seed`. The build log shows the value
+  (`[Sentinel] Using generated seed: N`); to reproduce a build, pin it with
+  `environment { SENTINEL_SEED = 'N' }` or `sentinelRun(seed: N)`.
 
 #### Passing build/test commands — three options
 
@@ -199,10 +201,17 @@ Runs sentinel mutation testing. All parameters are optional — configuration co
 | `testCommand` | String | `SENTINEL_TEST_COMMAND` | Test command (e.g., `make test`) |
 | `testResultDir` | String | `SENTINEL_TEST_RESULT_DIR` | Test result directory |
 | `sourceDir` | String | `SENTINEL_SOURCE_DIR` | Source root directory |
-| `seed` | long | `SENTINEL_SEED` | Random seed for reproducibility |
+| `seed` | long | `SENTINEL_SEED` | Random seed. Default: derived per build, shared by all partitions (value logged) |
 | `verbose` | boolean | `SENTINEL_VERBOSE` | Show detailed output |
 | `workspace` | String | `SENTINEL_WORKSPACE` | Sentinel workspace directory |
 | `sentinelPath` | String | `SENTINEL_PATH` | Path to sentinel executable |
+
+**Seed behavior:** if neither `seed` nor `SENTINEL_SEED` is set, the plugin
+derives a seed from the build's run ID — the same value for every `sentinelRun`
+in the build, a different value each build — and always passes `--seed` to
+sentinel. The log line
+`[Sentinel] Using generated seed: N (set SENTINEL_SEED to pin this run)`
+shows the value to reuse for reproduction.
 
 ### `sentinelReport`
 
