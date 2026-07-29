@@ -251,6 +251,43 @@
                                     <goal>report</goal>
                                 </goals>
                             </execution>
+                            <!--
+                                Floors sit just under what the suite
+                                actually achieves, so an ordinary change
+                                has room but a real drop fails the build
+                                instead of going unnoticed.
+                            -->
+                            <execution>
+                                <id>jacoco-check</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <rule>
+                                            <element>BUNDLE</element>
+                                            <limits>
+                                                <limit>
+                                                    <counter>INSTRUCTION</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.95</minimum>
+                                                </limit>
+                                                <limit>
+                                                    <counter>BRANCH</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.90</minimum>
+                                                </limit>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.95</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                    </rules>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
 
@@ -326,9 +363,17 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
+                        <!--
+                            failOnWarnings makes this an actual check:
+                            broken @link targets and malformed tags fail
+                            the build. "-missing" stays off because
+                            package-private helpers do not all need a
+                            doc comment; what matters is that the comments
+                            that exist are correct.
+                        -->
                         <configuration>
                             <failOnError>true</failOnError>
-                            <failOnWarnings>false</failOnWarnings>
+                            <failOnWarnings>true</failOnWarnings>
                             <doclint>all,-missing</doclint>
                             <sourcepath>${project.basedir}/src/main/java</sourcepath>
                             <subpackages>io.jenkins.plugins.sentinel</subpackages>
@@ -341,9 +386,6 @@
                                 <goals>
                                     <goal>jar</goal>
                                 </goals>
-                                <configuration>
-                                    <failOnError>false</failOnError>
-                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
