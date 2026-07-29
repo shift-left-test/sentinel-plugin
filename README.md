@@ -20,6 +20,28 @@ For distributed execution, combine with standard Jenkins `parallel` stages to sp
 - Maven 3.9+
 - sentinel installed on all Jenkins nodes (or available via Docker)
 
+## Installation
+
+Current release: **0.1.0**
+
+The plugin is not published to the Jenkins update center, so install the `.hpi`
+manually:
+
+1. Obtain `sentinel.hpi` — either build it from source
+   (`mvn -Dchangelist= clean verify` produces `target/sentinel.hpi`; see
+   [Cutting a release](#cutting-a-release)) or extract it from the Docker
+   `package` stage (see [Development](#docker-1)).
+2. In Jenkins, go to **Manage Jenkins → Plugins → Advanced settings**.
+3. Under **Deploy Plugin**, upload `sentinel.hpi`.
+4. Restart Jenkins.
+
+### Versioning
+
+Releases follow [Semantic Versioning](https://semver.org/). While the plugin is
+on `0.x`, the user-facing surface — step parameters and `SENTINEL_*` variable
+names — may still change in a minor release. Check the release notes before
+upgrading. The surface will be frozen at `1.0.0`.
+
 ## Quick Start
 
 ### Single Node
@@ -393,8 +415,12 @@ docker build --target build -t sentinel-build .
 # Build with static analysis
 docker build --target build --build-arg MAVEN_GOALS="clean verify -Pstatic-analysis" .
 
-# Extract .hpi artifact from the package stage
+# Extract .hpi artifact from the package stage (a -SNAPSHOT build)
 docker build -t sentinel .
+docker cp $(docker create sentinel):/opt/sentinel.hpi .
+
+# Same, but producing a release artifact
+docker build --build-arg MAVEN_GOALS="-Dchangelist= clean verify" -t sentinel .
 docker cp $(docker create sentinel):/opt/sentinel.hpi .
 ```
 
@@ -407,6 +433,31 @@ mvn clean verify
 # With static analysis (Checkstyle, SpotBugs, PMD, Error Prone, etc.)
 mvn clean verify -Pstatic-analysis
 ```
+
+An ordinary build produces a `-SNAPSHOT` artifact (`0.1.0-SNAPSHOT`), so it can
+never be confused with a released `.hpi`.
+
+### Cutting a release
+
+The version uses Maven's CI-friendly form, `${revision}${changelist}`. The
+suffix is dropped on the command line rather than by editing `pom.xml`:
+
+```bash
+# Produces a bare 0.1.0 artifact
+mvn -Dchangelist= clean verify -Pstatic-analysis
+
+# Record the release tag in the artifact's SCM metadata (optional)
+mvn -Dchangelist= -DscmTag=0.1.0 clean verify
+```
+
+To start a new release cycle, bump the `revision` property in `pom.xml` — not
+the `<version>` element, which stays as `${revision}${changelist}`.
+
+Note that `flatten-maven-plugin` is not enabled, so the `${revision}` literal
+survives into the POM embedded in the artifact. This is harmless here because
+the plugin is distributed as an `.hpi` (whose `Plugin-Version` manifest entry
+holds the resolved version) and never published to a Maven repository. Enable
+the parent POM's `might-produce-incrementals` profile if that ever changes.
 
 ### Testing Locally
 

@@ -14,14 +14,45 @@
 
     <groupId>io.jenkins.plugins</groupId>
     <artifactId>sentinel</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <!-- Maven CI-friendly version: an ordinary build produces
+         0.1.0-SNAPSHOT, a release build overrides changelist
+         (mvn -Dchangelist= ...) to produce a bare 0.1.0. -->
+    <version>${revision}${changelist}</version>
     <packaging>hpi</packaging>
 
     <name>Sentinel Plugin</name>
     <description>Parallelizes sentinel mutation testing across multiple Jenkins nodes using partition and merge-partition.</description>
-    <url>https://github.com/shift-left-test/sentinel-plugin</url>
+    <url>https://github.com/${gitHubRepo}</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <!-- Declared explicitly: without it Maven appends the artifactId to the
+         parent POM's scm, producing a nonexistent
+         github.com/jenkinsci/plugin-pom.git/sentinel and inheriting the
+         parent's own commit hash as <tag>. scmTag comes from the parent
+         (default HEAD); a release build can point it at the real tag with
+         -DscmTag=0.1.0 without committing the tag name into this file. -->
+    <scm>
+        <connection>scm:git:https://github.com/${gitHubRepo}.git</connection>
+        <developerConnection>scm:git:git@github.com:${gitHubRepo}.git</developerConnection>
+        <url>https://github.com/${gitHubRepo}</url>
+        <tag>${scmTag}</tag>
+    </scm>
 
     <properties>
+        <!-- Release version. Bump this, not <version>. -->
+        <revision>0.1.0</revision>
+        <!-- Overrides the parent's 999999-SNAPSHOT, which is meant for the
+             incrementals CD flow this plugin does not use. Cleared on the
+             command line to cut a release. -->
+        <changelist>-SNAPSHOT</changelist>
+        <gitHubRepo>shift-left-test/sentinel-plugin</gitHubRepo>
         <!-- No java.level: maven-hpi-plugin ignores it and warns that the
              warning will become an error, and the parent POM already sets
              maven.compiler.release to 17. -->
