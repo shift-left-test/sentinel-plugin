@@ -68,21 +68,41 @@ mvn pmd:check
 - Error assertions: `assertThatThrownBy(...).isInstanceOf().hasMessageContaining()`
 - `@TempDir` for file system tests, static final constants for test data
 
-## Static Analysis (9 tools)
+## Static Analysis
 
-All integrated via `static-analysis` Maven profile:
+`license-maven-plugin` and Maven Enforcer run in every build. The rest are
+in the `static-analysis` Maven profile:
 
 | Tool | Phase | Purpose |
 |------|-------|---------|
-| Maven Enforcer | validate | Build rules (Java 17, Maven version) |
+| Maven Enforcer | validate | Build rules (Java 17, Maven version) — always on |
+| License header check | verify | MIT header on every source file — always on |
 | Error Prone | compile | Compile-time bug detection |
 | Modernizer | compile | Legacy API detection |
-| JaCoCo | test | Code coverage |
+| JaCoCo | test + verify | Coverage report **and** a `check` floor |
+| JXR | generate-sources | Source cross-reference for the PMD/Checkstyle reports |
 | Checkstyle | verify | Code style |
 | SpotBugs | verify | Bytecode bug detection |
 | PMD | verify | Code quality patterns |
-| OWASP Dependency-Check | verify | Dependency vulnerability scan |
-| Javadoc | verify | API doc completeness |
+| Javadoc | verify | Doc correctness (`failOnWarnings`) |
+
+There is **no** dependency vulnerability scanner wired in. To add one,
+put `dependency-check-maven` in its own opt-in profile — it needs an NVD
+API key and a multi-minute database download, so it must not sit in the
+profile developers run on every change.
+
+### Coverage floors
+
+`jacoco:check` enforces BUNDLE minimums (instruction 0.95, branch 0.90,
+line 0.95), set just under what the suite achieves. Raise them when
+coverage rises; never lower them to make a build pass.
+
+### Javadoc is a real check
+
+`failOnError` **and** `failOnWarnings` are true, so a broken `{@link}`
+or a malformed tag fails the build. `doclint` keeps `-missing`: the point
+is that the comments which exist are correct, not that every
+package-private helper has one.
 
 ## Package Structure
 
@@ -100,13 +120,17 @@ io.jenkins.plugins.sentinel
 ├── SentinelBuildAction            # Build page: summary widget, report page (RunAction2)
 ├── SentinelProjectAction          # Project page: mutation score trend chart
 ├── SentinelProjectActionFactory   # TransientActionFactory for SentinelProjectAction
+├── SentinelStepExecution          # Base execution: REQUIRED_CONTEXT, inputs(), abort handling
+├── SentinelProcHandle             # Holds the running Proc so stop() can kill it
+├── SentinelWorkspaceCleaner       # Recreates only plugin-managed directories
 ├── config/
 │   ├── SentinelConfiguration      # Config data class
 │   ├── SentinelConfigValidator    # Config validation
 │   └── ThresholdAction            # Enum: FAILURE, UNSTABLE
 └── model/
     ├── SentinelResult             # Result data model
-    ├── MutationScore              # Mutation score model
+    ├── MutationScore              # Mutation score model + score/percent formatting
+    ├── MutationEntry              # One mutation parsed from mutations.xml
     └── FileMutationResult         # Per-file result model
 ```
 
@@ -123,6 +147,14 @@ io.jenkins.plugins.sentinel
 - No inline `<script>` or inline event handlers in Jelly — Jenkins enforces CSP `script-src 'self'` on plugin views; all client JS lives in the `io.jenkins.plugins.sentinel.charts` adjunct
 - In `floatingBox.jelly`, `it` is the Job, not the action (core taglib includes it via `st:include from=` only) — reference the action as `${from}`; `summary.jelly` does get `it` = action
 - No `String.format(...)` in Jelly — JEXL cannot call static methods and silently renders empty; format in Java getters (e.g. `MutationScore.formattedScore()`)
+- **Declaring `annotationProcessorPaths` disables classpath processor
+  discovery.** Adding Error Prone there switches javac to `-processorpath`,
+  which silently drops SezPoz and the Jenkins annotation-indexer, so
+  `META-INF/annotations/hudson.Extension` never gets written and every
+  `@Extension` (steps, descriptors) is undiscoverable at runtime — the
+  failure shows up as "No such DSL method", not as a compile error. The
+  pom lists both processors explicitly; leave them there. Versions come
+  from the parent POM's `dependencyManagement`, so do not pin them.
 
 ## PMD/SpotBugs Exclusion Rationale
 
@@ -140,7 +172,21 @@ io.jenkins.plugins.sentinel
   `Run.getExternalizableId()` via SHA-256 (`SentinelSeed`, range 0..2^32-1).
   `sentinelRun` always ends up passing `--seed`; all partitions of a build
   share the derived value.
-- Threshold is optional; if set, `thresholdAction` is required (paired validation)
+- **Blank means unset.** `SentinelEnvironment.isSet` is the single
+  definition: absent, empty, or whitespace-only all mean "the user did not
+  choose a value", so the plugin default applies. `toConfiguration`
+  normalizes at read time, so no downstream code repeats the check.
+- **Both steps build a `SentinelConfiguration` and validate it before
+  doing any work.** `sentinelReport` used to skip this, which made the
+  threshold range check and the threshold/thresholdAction pairing
+  unreachable in production. Never resolve a `sentinelReport` parameter
+  outside `toConfiguration`.
+- Threshold and `thresholdAction` must be set together — either one alone
+  is a quality gate that silently does nothing, so the validator rejects
+  both halves.
+- **The stash follows the configured workspace**, never a recomputed
+  `.sentinel-{index}`. Stash contents are relative to the stash root, so
+  `sentinelReport` can still unstash into `.sentinel-{index}` to merge.
 
 ## Docker
 
@@ -151,7 +197,10 @@ io.jenkins.plugins.sentinel
 ## Workflow Rules
 
 - Always summarize what you plan to implement and get approval before writing code.
-- All sentinel CLI options must be configurable via `SENTINEL_*` env vars and step parameters.
+- Every sentinel CLI option must be reachable via a `SENTINEL_*` env var
+  (or a repo `sentinel.yaml`). Step parameters cover only the options
+  users set per-branch — `sentinelRun` exposes 10 of the 24 options, and
+  that is deliberate, not a gap to close reflexively.
 - Never pass `--threshold` to sentinel — plugin handles threshold judgment from mutations.xml.
 - Report node = pipeline's current agent. Partition nodes = allocated by user via standard Jenkins `agent`/`node` directives.
 - When writing new code or modifying existing code:

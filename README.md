@@ -219,8 +219,8 @@ Collects results, merges partitions, generates reports, and applies threshold ju
 
 | Parameter | Type | Env Var | Default | Description |
 |-----------|------|---------|---------|-------------|
-| `threshold` | double | - | - | Minimum mutation score (0.0-100.0) |
-| `thresholdAction` | String | - | - | Action on failure: `FAILURE` or `UNSTABLE` |
+| `threshold` | double | - | - | Minimum mutation score (0.0-100.0). Requires `thresholdAction` |
+| `thresholdAction` | String | - | - | Action on failure: `FAILURE` or `UNSTABLE`. Requires `threshold` |
 | `partitionTotal` | int | `SENTINEL_PARTITION_TOTAL` | - | Number of partitions to collect and merge. Overrides the env var. |
 | `sourceDir` | String | `SENTINEL_SOURCE_DIR` | `.` | Source directory for HTML reports |
 | `outputDir` | String | `SENTINEL_OUTPUT_DIR` | `sentinel-report` | Report output directory |
@@ -277,6 +277,13 @@ All sentinel CLI options can be configured via `SENTINEL_*` environment variable
 - An **unrecognized `SENTINEL_*` variable** (usually a typo such as
   `SENTINEL_TIMOUT`) is reported as a warning and ignored; it does not fail
   the build, so unrelated `SENTINEL_`-prefixed variables stay safe.
+- An **empty or whitespace-only value counts as unset**, so
+  `SENTINEL_WORKSPACE = ''` falls back to the plugin default rather than
+  pointing sentinel at a directory named `""`. Numeric values are trimmed,
+  so `SENTINEL_TIMEOUT = ' 300 '` parses.
+- Both steps validate **before doing any work**. A bad `threshold` or a
+  misspelled `thresholdAction` fails immediately, not after the partitions
+  have been collected and merged.
 
 ## Build Results & Reporting
 
@@ -325,6 +332,26 @@ When `threshold` and `thresholdAction` are set on `sentinelReport`:
 - If the mutation score is **below the threshold**, the build result is set to `FAILURE` or `UNSTABLE` depending on `thresholdAction`.
 - If the mutation score **meets or exceeds the threshold**, the build result is not affected.
 - If neither is set, the mutation score is reported but does not affect the build result.
+
+**The two must be set together.** Setting only `threshold` leaves nothing
+to act on, and setting only `thresholdAction` leaves nothing to compare
+against — either alone is a gate that silently never fires, so the step
+fails instead of passing quietly. `threshold` is also range-checked
+(0.0–100.0) up front, before any partition is collected.
+
+### When everything was skipped
+
+A mutant is **SKIPPED** when it could not be evaluated at all (build
+failure, timeout, runtime error). Skipped mutants are excluded from the
+score's denominator, so a run in which *every* mutant was skipped scores
+`0.0%` by definition — and would trip any threshold. That is not a test
+gap, so the plugin says so explicitly in the build log:
+
+```
+[Sentinel] WARNING: all 240 mutants were skipped, so no mutant was actually
+evaluated. The score is 0.0% by definition here, not a test gap - check the
+build/test commands for failures, timeouts, or runtime errors.
+```
 
 ## Reliability & Cancellation
 
