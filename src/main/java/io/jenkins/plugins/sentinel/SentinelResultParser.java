@@ -130,7 +130,7 @@ public final class SentinelResultParser {
             throws IOException {
         try {
             return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             throw new IOException(
                     "Invalid lineNumber in mutations.xml: " + value, e);
         }
@@ -162,13 +162,21 @@ public final class SentinelResultParser {
             final DocumentBuilder builder =
                     factory.newDocumentBuilder();
             return builder.parse(input);
-        } catch (ParserConfigurationException
+        } catch (final ParserConfigurationException
                  | SAXException e) {
             throw new IOException(
                     "Failed to parse mutations.xml", e);
         }
     }
 
+    /**
+     * Returns the trimmed text of the first matching child element, or
+     * null when the element is absent.
+     *
+     * <p>{@code getTextContent()} on an element never returns null - an
+     * empty element yields "" - so absence is signalled only by an empty
+     * node list.</p>
+     */
     private static String getChildText(
             final Element parent, final String tagName) {
         final NodeList nodes =
@@ -176,7 +184,6 @@ public final class SentinelResultParser {
         if (nodes.getLength() == 0) {
             return null;
         }
-        final String text = nodes.item(0).getTextContent();
-        return text != null ? text.trim() : null;
+        return nodes.item(0).getTextContent().trim();
     }
 }

@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +49,8 @@ class SentinelBuildActionTest {
     private static final String CSP_HEADER = "Content-Security-Policy";
     private static final String CSP_PROPERTY =
             "io.jenkins.plugins.sentinel.reportCsp";
+    private static final String JENKINS_CSP_PROPERTY =
+            "hudson.model.DirectoryBrowserSupport.CSP";
     private static final String CUSTOM_CSP = "default-src 'none'";
 
     @Test
@@ -299,6 +302,105 @@ class SentinelBuildActionTest {
 
         verify(rsp).sendError(
                 eq(StaplerResponse2.SC_NOT_FOUND), anyString());
+    }
+
+    @Test
+    void onAttachedBindsTheRun() {
+        final SentinelBuildAction action = createAction(1, 0, 0);
+        final Run<?, ?> run = mock(Run.class);
+
+        action.onAttached(run);
+
+        assertThat(action.getRun()).isSameAs(run);
+    }
+
+    @Test
+    void onLoadRebindsTheRunAfterAControllerRestart() {
+        final SentinelBuildAction action = createAction(1, 0, 0);
+        final Run<?, ?> run = mock(Run.class);
+
+        action.onLoad(run);
+
+        assertThat(action.getRun()).isSameAs(run);
+    }
+
+    @Test
+    void getRunIsNullBeforeTheActionIsAttached() {
+        assertThat(createAction(1, 0, 0).getRun()).isNull();
+    }
+
+    @Test
+    void hasHtmlReportIsFalseWithoutARun() {
+        assertThat(createAction(1, 0, 0).hasHtmlReport()).isFalse();
+    }
+
+    @Test
+    void hasHtmlReportIsFalseWhenNothingWasArchived(
+            @TempDir final Path tempDir) {
+        assertThat(actionForRootDir(tempDir).hasHtmlReport()).isFalse();
+    }
+
+    @Test
+    void hasHtmlReportIsTrueOnceArchived(@TempDir final Path tempDir)
+            throws Exception {
+        assertThat(actionWithArchivedReport(tempDir).hasHtmlReport())
+                .isTrue();
+    }
+
+    @Test
+    void emptyCspPropertyDisablesTheHeaderEntirely(
+            @TempDir final Path tempDir) throws Exception {
+        System.setProperty(CSP_PROPERTY, "");
+        try {
+            final SentinelBuildAction action =
+                    actionWithArchivedReport(tempDir);
+            final StaplerResponse2 rsp =
+                    mockResponse(new ByteArrayOutputStream());
+
+            action.doDynamic(mock(StaplerRequest2.class), rsp);
+
+            verify(rsp, never()).setHeader(eq(CSP_HEADER), anyString());
+        } finally {
+            System.clearProperty(CSP_PROPERTY);
+        }
+    }
+
+    @Test
+    void jenkinsWideCspPropertyAppliesWhenNoPluginPropertyIsSet(
+            @TempDir final Path tempDir) throws Exception {
+        System.setProperty(JENKINS_CSP_PROPERTY, CUSTOM_CSP);
+        try {
+            final SentinelBuildAction action =
+                    actionWithArchivedReport(tempDir);
+            final StaplerResponse2 rsp =
+                    mockResponse(new ByteArrayOutputStream());
+
+            action.doDynamic(mock(StaplerRequest2.class), rsp);
+
+            assertThat(capturedCsp(rsp)).isEqualTo(CUSTOM_CSP);
+        } finally {
+            System.clearProperty(JENKINS_CSP_PROPERTY);
+        }
+    }
+
+    @Test
+    void pluginCspPropertyBeatsTheJenkinsWideOne(
+            @TempDir final Path tempDir) throws Exception {
+        System.setProperty(JENKINS_CSP_PROPERTY, "default-src 'self'");
+        System.setProperty(CSP_PROPERTY, CUSTOM_CSP);
+        try {
+            final SentinelBuildAction action =
+                    actionWithArchivedReport(tempDir);
+            final StaplerResponse2 rsp =
+                    mockResponse(new ByteArrayOutputStream());
+
+            action.doDynamic(mock(StaplerRequest2.class), rsp);
+
+            assertThat(capturedCsp(rsp)).isEqualTo(CUSTOM_CSP);
+        } finally {
+            System.clearProperty(CSP_PROPERTY);
+            System.clearProperty(JENKINS_CSP_PROPERTY);
+        }
     }
 
     /** Action whose build root dir holds an archived HTML report. */

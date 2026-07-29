@@ -20,6 +20,10 @@ import org.junit.jupiter.api.Test;
 class SentinelEnvironmentTest {
 
     private static final String TRUE_STR = "true";
+    private static final String FALLBACK = "fallback";
+    private static final String MANAGED = "managed";
+    private static final String ENV_SEED = "SENTINEL_SEED";
+    private static final String SRC = "src";
     private static final long SEED_VALUE = 12_345L;
     private static final String ENV_TIMEOUT = "SENTINEL_TIMEOUT";
     private static final String ENV_TIMOUT_TYPO = "SENTINEL_TIMOUT";
@@ -43,7 +47,7 @@ class SentinelEnvironmentTest {
     @Test
     void readsOptionalStringFieldsFromEnv() {
         final Map<String, String> env = new HashMap<>(requiredEnv());
-        env.put("SENTINEL_SOURCE_DIR", "src");
+        env.put("SENTINEL_SOURCE_DIR", SRC);
         env.put("SENTINEL_COMPILE_DB_DIR", "build");
         env.put("SENTINEL_FROM", "HEAD~1");
         env.put("SENTINEL_GENERATOR", "random");
@@ -55,7 +59,7 @@ class SentinelEnvironmentTest {
         final SentinelConfiguration config =
                 SentinelEnvironment.toConfiguration(env);
 
-        assertThat(config.getSourceDir()).isEqualTo("src");
+        assertThat(config.getSourceDir()).isEqualTo(SRC);
         assertThat(config.getCompileDbDir()).isEqualTo("build");
         assertThat(config.getFrom()).isEqualTo("HEAD~1");
         assertThat(config.getGenerator()).isEqualTo("random");
@@ -84,7 +88,7 @@ class SentinelEnvironmentTest {
     @Test
     void readsSeedFromEnv() {
         final Map<String, String> env = new HashMap<>(requiredEnv());
-        env.put("SENTINEL_SEED", String.valueOf(SEED_VALUE));
+        env.put(ENV_SEED, String.valueOf(SEED_VALUE));
 
         final SentinelConfiguration config =
                 SentinelEnvironment.toConfiguration(env);
@@ -177,12 +181,12 @@ class SentinelEnvironmentTest {
     @Test
     void invalidSeedEnvVarFailsWithVariableName() {
         final Map<String, String> env = new HashMap<>(requiredEnv());
-        env.put("SENTINEL_SEED", "xyz");
+        env.put(ENV_SEED, "xyz");
 
         assertThatThrownBy(() ->
                 SentinelEnvironment.toConfiguration(env))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("SENTINEL_SEED")
+                .hasMessageContaining(ENV_SEED)
                 .hasMessageContaining("xyz");
     }
 
@@ -291,6 +295,150 @@ class SentinelEnvironmentTest {
         assertThat(out.toString(StandardCharsets.UTF_8))
                 .contains(ENV_TIMOUT_TYPO)
                 .contains("unknown variable");
+    }
+
+    // --- "set" is one definition, not six --------------------------------
+
+    @Test
+    void isSetRejectsNullEmptyAndWhitespace() {
+        assertThat(SentinelEnvironment.isSet("value")).isTrue();
+        assertThat(SentinelEnvironment.isSet(null)).isFalse();
+        assertThat(SentinelEnvironment.isSet("")).isFalse();
+        assertThat(SentinelEnvironment.isSet("   ")).isFalse();
+    }
+
+    @Test
+    void orDefaultFallsBackForEveryUnsetForm() {
+        assertThat(SentinelEnvironment.orDefault("value", FALLBACK))
+                .isEqualTo("value");
+        assertThat(SentinelEnvironment.orDefault(null, FALLBACK))
+                .isEqualTo(FALLBACK);
+        assertThat(SentinelEnvironment.orDefault("", FALLBACK))
+                .isEqualTo(FALLBACK);
+        assertThat(SentinelEnvironment.orDefault(" ", FALLBACK))
+                .isEqualTo(FALLBACK);
+    }
+
+    @Test
+    void managedDefaultYieldsTheDefaultOnlyWhenNothingIsOverridden() {
+        assertThat(SentinelEnvironment.managedDefault(
+                null, null, MANAGED)).isEqualTo(MANAGED);
+        assertThat(SentinelEnvironment.managedDefault(
+                null, "", MANAGED)).isEqualTo(MANAGED);
+    }
+
+    @Test
+    void managedDefaultYieldsNullWhenTheUserChoseTheDirectory() {
+        assertThat(SentinelEnvironment.managedDefault(
+                "step", null, MANAGED)).isNull();
+        assertThat(SentinelEnvironment.managedDefault(
+                null, "env", MANAGED)).isNull();
+        assertThat(SentinelEnvironment.managedDefault(
+                "step", "env", MANAGED)).isNull();
+    }
+
+    @Test
+    void overrideAppliesOnlyNonNullValues() {
+        final SentinelConfiguration config = new SentinelConfiguration();
+        config.setBuildCommand("from-env");
+
+        SentinelEnvironment.override(null, config::setBuildCommand);
+        assertThat(config.getBuildCommand()).isEqualTo("from-env");
+
+        SentinelEnvironment.override("from-step", config::setBuildCommand);
+        assertThat(config.getBuildCommand()).isEqualTo("from-step");
+    }
+
+    // --- blank values mean "unset" ---------------------------------------
+
+    @Test
+    void blankStringVariablesReadAsUnset() {
+        final Map<String, String> env = new HashMap<>();
+        env.put("SENTINEL_WORKSPACE", "");
+        env.put("SENTINEL_SOURCE_DIR", "   ");
+        env.put("SENTINEL_OUTPUT_DIR", "");
+
+        final SentinelConfiguration config =
+                SentinelEnvironment.toConfiguration(env);
+
+        assertThat(config.getWorkspace()).isNull();
+        assertThat(config.getSourceDir()).isNull();
+        assertThat(config.getOutputDir()).isNull();
+    }
+
+    @Test
+    void blankNumericVariablesReadAsUnset() {
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_TIMEOUT, "   ");
+        env.put(ENV_SEED, "");
+        env.put("SENTINEL_PARTITION_TOTAL", " ");
+
+        final SentinelConfiguration config =
+                SentinelEnvironment.toConfiguration(env);
+
+        assertThat(config.getTimeout()).isNull();
+        assertThat(config.getSeed()).isNull();
+        assertThat(config.getPartitionTotal()).isNull();
+    }
+
+    @Test
+    void paddedNumericVariablesStillParse() {
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_TIMEOUT, " 300 ");
+        env.put(ENV_SEED, " 42 ");
+
+        final SentinelConfiguration config =
+                SentinelEnvironment.toConfiguration(env);
+
+        assertThat(config.getTimeout()).isEqualTo(300);
+        assertThat(config.getSeed()).isEqualTo(42L);
+    }
+
+    @Test
+    void paddedBooleanVariablesStillParse() {
+        final Map<String, String> env = new HashMap<>();
+        env.put("SENTINEL_VERBOSE", " TRUE ");
+
+        assertThat(SentinelEnvironment.toConfiguration(env).isVerbose())
+                .isTrue();
+    }
+
+    @Test
+    void listVariablesDropBlankEntries() {
+        final Map<String, String> env = new HashMap<>();
+        env.put("SENTINEL_PATTERNS", "src/*.cpp, ,lib/*.cpp,");
+
+        assertThat(SentinelEnvironment.toConfiguration(env).getPatterns())
+                .containsExactly("src/*.cpp", "lib/*.cpp");
+    }
+
+    // --- effective values ------------------------------------------------
+
+    @Test
+    void effectiveDirectoriesFallBackToTheDocumentedDefaults() {
+        final SentinelConfiguration config = new SentinelConfiguration();
+
+        assertThat(SentinelEnvironment.effectiveSourceDir(config))
+                .isEqualTo(SentinelEnvironment.DEFAULT_SOURCE_DIR);
+        assertThat(SentinelEnvironment.effectiveOutputDir(config))
+                .isEqualTo(SentinelEnvironment.DEFAULT_OUTPUT_DIR);
+        assertThat(SentinelEnvironment.effectiveSingleWorkspace(config))
+                .isEqualTo(SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE);
+    }
+
+    @Test
+    void effectiveDirectoriesUseTheConfiguredValues() {
+        final SentinelConfiguration config = new SentinelConfiguration();
+        config.setSourceDir(SRC);
+        config.setOutputDir("out");
+        config.setWorkspace("ws");
+
+        assertThat(SentinelEnvironment.effectiveSourceDir(config))
+                .isEqualTo(SRC);
+        assertThat(SentinelEnvironment.effectiveOutputDir(config))
+                .isEqualTo("out");
+        assertThat(SentinelEnvironment.effectiveSingleWorkspace(config))
+                .isEqualTo("ws");
     }
 
     private Map<String, String> requiredEnv() {

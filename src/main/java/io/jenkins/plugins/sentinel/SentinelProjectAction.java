@@ -143,12 +143,7 @@ public class SentinelProjectAction implements Action {
         }
 
         Collections.reverse(points);
-
-        final JSONArray array = new JSONArray();
-        for (final JSONObject point : points) {
-            array.add(point);
-        }
-        return array.toString();
+        return JSONArray.fromObject(points).toString();
     }
 
     /** {@inheritDoc} */

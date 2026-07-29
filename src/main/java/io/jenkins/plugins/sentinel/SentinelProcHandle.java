@@ -55,7 +55,7 @@ final class SentinelProcHandle {
         }
         try {
             proc.kill();
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.log(Level.FINE,
                     "Failed to kill sentinel process on abort", e);
         }

@@ -71,10 +71,10 @@ class SentinelResultTest {
     }
 
     @Test
-    void skippedEntryHasNullKillingTest() {
-        final MutationEntry entry = MutationEntry.skippedEntry(
+    void skippedEntryIsNeitherDetectedNorKilledByATest() {
+        final MutationEntry entry = new MutationEntry(
                 "bar.cpp", BAR_CPP, "BarClass", "barMethod",
-                10, "ROR");
+                10, "ROR", false, true, null);
         assertThat(entry.detected()).isFalse();
         assertThat(entry.skipped()).isTrue();
         assertThat(entry.killingTest()).isNull();

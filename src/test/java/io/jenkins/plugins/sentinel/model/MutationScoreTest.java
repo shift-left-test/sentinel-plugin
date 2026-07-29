@@ -55,6 +55,61 @@ class MutationScoreTest {
     }
 
     @Test
+    void equalsIsReflexive() {
+        final MutationScore score = new MutationScore(10, 5, 2);
+        assertThat(score.equals(score)).isTrue();
+    }
+
+    @Test
+    void equalsRejectsNullAndOtherTypes() {
+        final MutationScore score = new MutationScore(10, 5, 2);
+        assertThat(score).isNotEqualTo(null);
+        assertThat(score).isNotEqualTo("10/5/2");
+    }
+
+    @Test
+    void equalsComparesEveryCountSeparately() {
+        final MutationScore base = new MutationScore(10, 5, 2);
+        assertThat(base).isNotEqualTo(new MutationScore(11, 5, 2));
+        assertThat(base).isNotEqualTo(new MutationScore(10, 6, 2));
+        assertThat(base).isNotEqualTo(new MutationScore(10, 5, 3));
+    }
+
+    @Test
+    void totalWithSkippedCountsEveryMutant() {
+        final MutationScore score = new MutationScore(80, 20, 5);
+        assertThat(score.totalWithSkipped()).isEqualTo(105);
+        // total() is the score denominator and must stay skipped-free.
+        assertThat(score.total()).isEqualTo(100);
+    }
+
+    @Test
+    void percentOfSplitsTheStatusCounts() {
+        final MutationScore score = new MutationScore(50, 30, 20);
+        assertThat(score.percentOf(score.killed())).isEqualTo(50);
+        assertThat(score.percentOf(score.survived())).isEqualTo(30);
+        assertThat(score.percentOf(score.skipped())).isEqualTo(20);
+    }
+
+    @Test
+    void percentOfReturnsZeroWhenThereAreNoMutants() {
+        final MutationScore score = new MutationScore(0, 0, 0);
+        assertThat(score.totalWithSkipped()).isZero();
+        assertThat(score.percentOf(0)).isZero();
+    }
+
+    @Test
+    void allSkippedScoresZeroButCountsEveryMutant() {
+        // The case that trips a threshold without any test gap: nothing was
+        // evaluated, so score() is 0.0 by definition.
+        final MutationScore score = new MutationScore(0, 0, 40);
+        assertThat(score.total()).isZero();
+        assertThat(score.score()).isEqualTo(0.0);
+        assertThat(score.totalWithSkipped()).isEqualTo(40);
+        assertThat(score.percentOf(score.skipped())).isEqualTo(100);
+    }
+
+    @Test
     void formattedScoreHasOneDecimal() {
         // 42 / (42 + 21) * 100 = 66.666...
         final MutationScore score = new MutationScore(42, 21, 14);
@@ -90,13 +145,4 @@ class MutationScoreTest {
         assertThat(score.toString()).contains("80.0");
     }
 
-    @Test
-    void mergesCombinesCounts() {
-        final MutationScore a = new MutationScore(10, 5, 2);
-        final MutationScore b = new MutationScore(20, 10, 3);
-        final MutationScore merged = a.merge(b);
-        assertThat(merged.killed()).isEqualTo(30);
-        assertThat(merged.survived()).isEqualTo(15);
-        assertThat(merged.skipped()).isEqualTo(5);
-    }
 }

@@ -6,8 +6,14 @@
 package io.jenkins.plugins.sentinel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 class SentinelSeedTest {
 
@@ -45,6 +51,23 @@ class SentinelSeedTest {
         for (int i = 0; i < 1_000; i++) {
             assertThat(SentinelSeed.deriveFrom("job-" + i + "#" + i))
                     .isBetween(0L, MAX_UNSIGNED_INT);
+        }
+    }
+
+    @Test
+    void missingSha256FailsLoudlyRatherThanSilently() throws Exception {
+        // SHA-256 is JDK-mandatory, so this can only happen on a crippled
+        // runtime; the point is that it surfaces instead of producing a
+        // silently different seed per partition.
+        try (MockedStatic<MessageDigest> digests =
+                     Mockito.mockStatic(MessageDigest.class)) {
+            digests.when(() -> MessageDigest.getInstance("SHA-256"))
+                    .thenThrow(new NoSuchAlgorithmException("no SHA-256"));
+
+            assertThatThrownBy(() -> SentinelSeed.deriveFrom(RUN_ID))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("SHA-256")
+                    .hasCauseInstanceOf(NoSuchAlgorithmException.class);
         }
     }
 }

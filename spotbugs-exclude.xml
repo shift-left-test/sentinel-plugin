@@ -24,17 +24,6 @@
         <Bug pattern="UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR"/>
     </Match>
 
-    <!-- CPS callbacks: inner classes hold reference to outer StepExecution
-         which is required to access getContext(); outer class is also Serializable -->
-    <Match>
-        <Class name="io.jenkins.plugins.sentinel.SentinelOrchestrator$AfterPartitionCallback"/>
-        <Bug pattern="SE_INNER_CLASS"/>
-    </Match>
-    <Match>
-        <Class name="io.jenkins.plugins.sentinel.SentinelOrchestrator$MultiPartitionCallback"/>
-        <Bug pattern="SE_INNER_CLASS"/>
-    </Match>
-
     <!-- procHandle holds a hudson.Proc (not Serializable) so it MUST be
          transient. It is intentionally not restored on deserialization:
          SynchronousNonBlockingStepExecution does not resume across a

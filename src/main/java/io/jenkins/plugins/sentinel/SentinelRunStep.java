@@ -7,15 +7,12 @@ package io.jenkins.plugins.sentinel;
 
 import java.io.PrintStream;
 import java.io.Serializable;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
-import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
-import hudson.Launcher;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import io.jenkins.plugins.sentinel.config.SentinelConfigValidator;
@@ -178,30 +175,22 @@ public class SentinelRunStep extends Step implements Serializable {
     }
 
     String managedWorkspaceForCleanup(final Map<String, String> env) {
-        if (workspace != null) {
-            return null;
-        }
-        final String envWorkspace = env.get(SentinelEnvironment.WORKSPACE);
-        if (envWorkspace != null && !envWorkspace.isEmpty()) {
-            return null;
-        }
-        if (partitionIndex != null) {
-            return SentinelEnvironment.partitionWorkspace(partitionIndex);
-        }
-        return SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE;
+        return SentinelEnvironment.managedDefault(
+                workspace,
+                env.get(SentinelEnvironment.WORKSPACE),
+                partitionIndex != null
+                        ? SentinelEnvironment.partitionWorkspace(
+                                partitionIndex)
+                        : SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE);
     }
 
     void prepareManagedWorkspace(
             final FilePath ws,
             final Map<String, String> env,
             final TaskListener listener) throws Exception {
-        final String managedWorkspace = managedWorkspaceForCleanup(env);
-        if (managedWorkspace != null) {
-            SentinelWorkspaceCleaner.recreateDirectory(
-                    ws.child(managedWorkspace),
-                    listener,
-                    "sentinel workspace");
-        }
+        SentinelWorkspaceCleaner.recreateIfManaged(
+                ws, managedWorkspaceForCleanup(env),
+                listener, "sentinel workspace");
     }
 
     /**
@@ -227,38 +216,17 @@ public class SentinelRunStep extends Step implements Serializable {
                 + " (set SENTINEL_SEED to pin this run)");
     }
 
-    @SuppressWarnings("PMD.NPathComplexity")
     private void applyOverrides(final SentinelConfiguration c) {
-        if (buildCommand != null) {
-            c.setBuildCommand(buildCommand);
-        }
-        if (testCommand != null) {
-            c.setTestCommand(testCommand);
-        }
-        if (testResultDir != null) {
-            c.setTestResultDir(testResultDir);
-        }
-        if (sourceDir != null) {
-            c.setSourceDir(sourceDir);
-        }
-        if (seed != null) {
-            c.setSeed(seed);
-        }
-        if (verbose != null) {
-            c.setVerbose(verbose);
-        }
-        if (workspace != null) {
-            c.setWorkspace(workspace);
-        }
-        if (sentinelPath != null) {
-            c.setSentinelPath(sentinelPath);
-        }
-        if (partitionIndex != null) {
-            c.setPartitionIndex(partitionIndex);
-        }
-        if (partitionTotal != null) {
-            c.setPartitionTotal(partitionTotal);
-        }
+        SentinelEnvironment.override(buildCommand, c::setBuildCommand);
+        SentinelEnvironment.override(testCommand, c::setTestCommand);
+        SentinelEnvironment.override(testResultDir, c::setTestResultDir);
+        SentinelEnvironment.override(sourceDir, c::setSourceDir);
+        SentinelEnvironment.override(seed, c::setSeed);
+        SentinelEnvironment.override(verbose, c::setVerbose);
+        SentinelEnvironment.override(workspace, c::setWorkspace);
+        SentinelEnvironment.override(sentinelPath, c::setSentinelPath);
+        SentinelEnvironment.override(partitionIndex, c::setPartitionIndex);
+        SentinelEnvironment.override(partitionTotal, c::setPartitionTotal);
     }
 
     private void applyAutoWorkspace(
@@ -290,37 +258,25 @@ public class SentinelRunStep extends Step implements Serializable {
 
         @Override
         protected Integer run() throws Exception {
-            final TaskListener listener = getContext()
-                    .get(TaskListener.class);
-            final FilePath ws = getContext().get(FilePath.class);
-            final Launcher launcher = getContext()
-                    .get(Launcher.class);
-            final Map<String, String> env =
-                    getContext().get(EnvVars.class);
-            final Run<?, ?> build = getContext().get(Run.class);
-
-            SentinelEnvironment.warnUnknownVariables(
-                    env, listener.getLogger());
+            final Inputs in = inputs();
 
             final SentinelConfiguration config =
-                    step.toConfiguration(env);
+                    step.toConfiguration(in.env());
             step.applySeedFallback(config,
-                    build.getExternalizableId(),
-                    listener.getLogger());
+                    in.build().getExternalizableId(),
+                    in.listener().getLogger());
             SentinelConfigValidator.validate(config);
-            step.prepareManagedWorkspace(ws, env, listener);
+            step.prepareManagedWorkspace(
+                    in.ws(), in.env(), in.listener());
 
-            final String sentinelCmd = SentinelGlobalConfiguration
-                    .getEffectivePath(config.getSentinelPath());
-
-            final List<String> args = SentinelCommandBuilder
-                    .buildRunArgs(config);
-            args.add(0, sentinelCmd);
-
-            SentinelRunner.run(args, env, ws, launcher, listener,
+            SentinelRunner.run(
+                    SentinelGlobalConfiguration.getEffectivePath(
+                            config.getSentinelPath()),
+                    SentinelCommandBuilder.buildRunArgs(config),
+                    in.env(), in.ws(), in.launcher(), in.listener(),
                     procHandle);
 
-            stashResults(ws, config, listener, build);
+            stashResults(in.ws(), config, in.listener(), in.build());
             return 0;
         }
 
@@ -330,20 +286,18 @@ public class SentinelRunStep extends Step implements Serializable {
                 final TaskListener listener,
                 final Run<?, ?> build) throws Exception {
             final Integer idx = config.getPartitionIndex();
-            final String stashName;
-            final String stashDir;
-
-            if (idx != null) {
-                stashName = SentinelEnvironment.stashName(idx);
-                stashDir = SentinelEnvironment
-                        .partitionWorkspace(idx);
-            } else {
-                stashName = SentinelEnvironment.SINGLE_STASH_NAME;
-                stashDir = config.getWorkspace() != null
-                        ? config.getWorkspace()
-                        : SentinelEnvironment
-                                .DEFAULT_SINGLE_WORKSPACE;
-            }
+            final String stashName = idx != null
+                    ? SentinelEnvironment.stashName(idx)
+                    : SentinelEnvironment.SINGLE_STASH_NAME;
+            // Stash the directory sentinel was actually told to write to,
+            // never a recomputed partition path: when the user pins an
+            // explicit workspace alongside partitionIndex, .sentinel-{idx}
+            // does not exist and the partition would stash nothing.
+            // The stash is keyed by name and its contents are relative to
+            // this root, so sentinelReport can still unstash it into
+            // .sentinel-{idx} for the merge.
+            final String stashDir =
+                    SentinelEnvironment.effectiveSingleWorkspace(config);
 
             listener.getLogger().println(
                     "[Sentinel] Stashing results: "
@@ -374,10 +328,7 @@ public class SentinelRunStep extends Step implements Serializable {
 
         @Override
         public Set<? extends Class<?>> getRequiredContext() {
-            return Set.of(
-                    FilePath.class, Launcher.class,
-                    TaskListener.class, EnvVars.class,
-                    Run.class);
+            return SentinelStepExecution.REQUIRED_CONTEXT;
         }
     }
 }

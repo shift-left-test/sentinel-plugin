@@ -146,14 +146,18 @@ public final class SentinelCommandBuilder {
         }
     }
 
+    /**
+     * Emits one {@code flag=value} per entry.
+     *
+     * <p>No null guard: {@code SentinelConfiguration}'s list setters
+     * coerce null to an empty list, so the list is never null here.</p>
+     */
     private static void addRepeated(
             final List<String> args,
             final String flag,
             final List<String> values) {
-        if (values != null) {
-            for (final String value : values) {
-                args.add(flag + "=" + value);
-            }
+        for (final String value : values) {
+            args.add(flag + "=" + value);
         }
     }
 }

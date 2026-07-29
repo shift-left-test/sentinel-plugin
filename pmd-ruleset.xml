@@ -65,7 +65,8 @@
         <exclude name="LawOfDemeter"/>
         <!-- SignatureDeclareThrowsException: StepExecution.run() requires throws Exception -->
         <exclude name="SignatureDeclareThrowsException"/>
-        <!-- UseObjectForClearerAPI: MutationEntry record mirrors XML structure -->
+        <!-- UseObjectForClearerAPI: MutationEntry's constructor mirrors the
+             mutations.xml element structure one-for-one -->
         <exclude name="UseObjectForClearerAPI"/>
         <!-- CognitiveComplexity/CyclomaticComplexity: orchestration logic is inherently complex -->
         <exclude name="CognitiveComplexity"/>

@@ -127,6 +127,154 @@ class SentinelResultParserTest {
                 .isInstanceOf(IOException.class);
     }
 
+    @Test
+    void absentKillingTestElementYieldsNull() throws Exception {
+        final String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <mutations>
+                    <mutation detected="false">
+                        <sourceFile>a.cpp</sourceFile>
+                        <sourceFilePath>src/a.cpp</sourceFilePath>
+                        <mutatedClass>A</mutatedClass>
+                        <mutatedMethod>m</mutatedMethod>
+                        <lineNumber>7</lineNumber>
+                        <mutator>AOR</mutator>
+                    </mutation>
+                </mutations>
+                """;
+        final SentinelResult result = parse(xml);
+
+        assertThat(result.entries()).singleElement()
+                .satisfies(e -> assertThat(e.killingTest()).isNull());
+        assertThat(result.overallScore().survived()).isEqualTo(1);
+    }
+
+    @Test
+    void emptyKillingTestElementYieldsNull() throws Exception {
+        final String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <mutations>
+                    <mutation detected="true">
+                        <sourceFile>a.cpp</sourceFile>
+                        <sourceFilePath>src/a.cpp</sourceFilePath>
+                        <mutatedClass>A</mutatedClass>
+                        <mutatedMethod>m</mutatedMethod>
+                        <lineNumber>7</lineNumber>
+                        <mutator>AOR</mutator>
+                        <killingTest></killingTest>
+                    </mutation>
+                </mutations>
+                """;
+        assertThat(parse(xml).entries()).singleElement()
+                .satisfies(e -> assertThat(e.killingTest()).isNull());
+    }
+
+    @Test
+    void surroundingWhitespaceIsTrimmedFromElementText() throws Exception {
+        final String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <mutations>
+                    <mutation detected="true">
+                        <sourceFile>  a.cpp  </sourceFile>
+                        <sourceFilePath>  src/a.cpp  </sourceFilePath>
+                        <mutatedClass>  A  </mutatedClass>
+                        <mutatedMethod>  m  </mutatedMethod>
+                        <lineNumber>  7  </lineNumber>
+                        <mutator>  AOR  </mutator>
+                        <killingTest>  T  </killingTest>
+                    </mutation>
+                </mutations>
+                """;
+        final MutationEntry entry = parse(xml).entries().get(0);
+
+        assertThat(entry.sourceFile()).isEqualTo("a.cpp");
+        assertThat(entry.sourceFilePath()).isEqualTo("src/a.cpp");
+        assertThat(entry.mutatedClass()).isEqualTo("A");
+        assertThat(entry.mutatedMethod()).isEqualTo("m");
+        assertThat(entry.mutator()).isEqualTo("AOR");
+        assertThat(entry.killingTest()).isEqualTo("T");
+        assertThat(entry.lineNumber()).isEqualTo(7);
+    }
+
+    @Test
+    void absentLineNumberFailsWithAClearMessage() {
+        final String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <mutations>
+                    <mutation detected="true">
+                        <sourceFile>a.cpp</sourceFile>
+                        <sourceFilePath>src/a.cpp</sourceFilePath>
+                        <mutatedClass>A</mutatedClass>
+                        <mutatedMethod>m</mutatedMethod>
+                        <mutator>AOR</mutator>
+                    </mutation>
+                </mutations>
+                """;
+        assertThatThrownBy(() -> parse(xml))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("lineNumber");
+    }
+
+    @Test
+    void unknownDetectedValueCountsAsSurvived() throws Exception {
+        // Anything that is neither "true" nor "skip" is not a kill.
+        final String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <mutations>
+                    <mutation detected="maybe">
+                        <sourceFile>a.cpp</sourceFile>
+                        <sourceFilePath>src/a.cpp</sourceFilePath>
+                        <mutatedClass>A</mutatedClass>
+                        <mutatedMethod>m</mutatedMethod>
+                        <lineNumber>1</lineNumber>
+                        <mutator>AOR</mutator>
+                    </mutation>
+                </mutations>
+                """;
+        final SentinelResult result = parse(xml);
+
+        assertThat(result.overallScore().survived()).isEqualTo(1);
+        assertThat(result.overallScore().killed()).isZero();
+        assertThat(result.overallScore().skipped()).isZero();
+    }
+
+    @Test
+    void fileResultsKeepDocumentOrder() throws Exception {
+        final String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <mutations>
+                    <mutation detected="true">
+                        <sourceFile>z.cpp</sourceFile>
+                        <sourceFilePath>src/z.cpp</sourceFilePath>
+                        <mutatedClass>Z</mutatedClass>
+                        <mutatedMethod>m</mutatedMethod>
+                        <lineNumber>1</lineNumber>
+                        <mutator>AOR</mutator>
+                        <killingTest>T</killingTest>
+                    </mutation>
+                    <mutation detected="true">
+                        <sourceFile>a.cpp</sourceFile>
+                        <sourceFilePath>src/a.cpp</sourceFilePath>
+                        <mutatedClass>A</mutatedClass>
+                        <mutatedMethod>m</mutatedMethod>
+                        <lineNumber>1</lineNumber>
+                        <mutator>AOR</mutator>
+                        <killingTest>T</killingTest>
+                    </mutation>
+                </mutations>
+                """;
+        assertThat(parse(xml).fileResults())
+                .extracting(FileMutationResult::filePath)
+                .containsExactly("src/z.cpp", "src/a.cpp");
+    }
+
+    private SentinelResult parse(final String xml) throws Exception {
+        try (InputStream in = new ByteArrayInputStream(
+                xml.getBytes(StandardCharsets.UTF_8))) {
+            return SentinelResultParser.parse(in);
+        }
+    }
+
     private SentinelResult parseResource(final String name)
             throws Exception {
         try (InputStream in = Thread.currentThread()

@@ -32,6 +32,7 @@ class SentinelProjectActionTest {
     private static final int SKIPPED_1 = 1;
     private static final int BUILD_1 = 1;
     private static final int BUILD_2 = 2;
+    private static final String BUILD_NUMBER = "buildNumber";
 
     @Test
     void trendDataCollectsFromRecentBuilds() {
@@ -64,8 +65,8 @@ class SentinelProjectActionTest {
 
         final JSONObject first = array.getJSONObject(0);
         final JSONObject second = array.getJSONObject(1);
-        assertThat(first.getInt("buildNumber")).isEqualTo(BUILD_2);
-        assertThat(second.getInt("buildNumber")).isEqualTo(BUILD_1);
+        assertThat(first.getInt(BUILD_NUMBER)).isEqualTo(BUILD_2);
+        assertThat(second.getInt(BUILD_NUMBER)).isEqualTo(BUILD_1);
     }
 
     @Test
@@ -94,7 +95,7 @@ class SentinelProjectActionTest {
         final JSONArray array = JSONArray.fromObject(json);
 
         assertThat(array.size()).isEqualTo(1);
-        assertThat(array.getJSONObject(0).getInt("buildNumber"))
+        assertThat(array.getJSONObject(0).getInt(BUILD_NUMBER))
                 .isEqualTo(BUILD_1);
     }
 
@@ -128,6 +129,80 @@ class SentinelProjectActionTest {
         final Job<?, ?> job = mock(Job.class);
         final SentinelProjectAction action = new SentinelProjectAction(job);
         assertThat(action.getJob()).isSameAs(job);
+    }
+
+    @Test
+    void trendDataIsRecomputedAfterAnotherBuildCompletes() {
+        final Job<?, ?> job = mock(Job.class);
+        final Run<?, ?> first = mockBuild(BUILD_1,
+                KILLED_12, SURVIVED_8, SKIPPED_2, null);
+        when(job.getLastCompletedBuild()).thenReturn((Run) first);
+
+        final SentinelProjectAction action = new SentinelProjectAction(job);
+        assertThat(JSONArray.fromObject(action.getTrendDataJson()).size())
+                .isEqualTo(1);
+
+        // A newer build completes: the memoized value must not stick.
+        final Run<?, ?> second = mockBuild(BUILD_2,
+                KILLED_18, SURVIVED_2, SKIPPED_1, first);
+        when(job.getLastCompletedBuild()).thenReturn((Run) second);
+
+        final JSONArray refreshed =
+                JSONArray.fromObject(action.getTrendDataJson());
+        assertThat(refreshed.size()).isEqualTo(2);
+        assertThat(refreshed.getJSONObject(1).getInt(BUILD_NUMBER))
+                .isEqualTo(BUILD_2);
+    }
+
+    @Test
+    void trendDataStopsAtTheWindowSize() {
+        final Job<?, ?> job = mock(Job.class);
+        Run<?, ?> previous = null;
+        for (int number = 1;
+                number <= SentinelProjectAction.MAX_BUILDS + 5; number++) {
+            previous = mockBuild(number, KILLED_12, SURVIVED_8,
+                    SKIPPED_2, previous);
+        }
+        when(job.getLastCompletedBuild()).thenReturn((Run) previous);
+
+        final JSONArray trend = JSONArray.fromObject(
+                new SentinelProjectAction(job).getTrendDataJson());
+
+        assertThat(trend.size())
+                .isEqualTo(SentinelProjectAction.MAX_BUILDS);
+    }
+
+    @Test
+    void trendPointsCarryEveryStatusCount() {
+        final Job<?, ?> job = mock(Job.class);
+        final Run<?, ?> build = mockBuild(BUILD_1,
+                KILLED_12, SURVIVED_8, SKIPPED_2, null);
+        when(job.getLastCompletedBuild()).thenReturn((Run) build);
+
+        final JSONObject point = JSONArray.fromObject(
+                new SentinelProjectAction(job).getTrendDataJson())
+                .getJSONObject(0);
+
+        assertThat(point.getInt("killed")).isEqualTo(KILLED_12);
+        assertThat(point.getInt("survived")).isEqualTo(SURVIVED_8);
+        assertThat(point.getInt("skipped")).isEqualTo(SKIPPED_2);
+        assertThat(point.getDouble("score")).isEqualTo(60.0);
+    }
+
+    @Test
+    void hasTrendDataMatchesWhetherThereAreAnyPoints() {
+        // Build the stub first: Mockito rejects nested stubbing inside a
+        // when(...) argument.
+        final Run<?, ?> build = mockBuild(BUILD_1, KILLED_12, SURVIVED_8,
+                SKIPPED_2, null);
+        final Job<?, ?> withResults = mock(Job.class);
+        when(withResults.getLastCompletedBuild()).thenReturn((Run) build);
+        assertThat(SentinelProjectAction.hasTrendData(withResults))
+                .isTrue();
+
+        final Job<?, ?> empty = mock(Job.class);
+        when(empty.getLastCompletedBuild()).thenReturn(null);
+        assertThat(SentinelProjectAction.hasTrendData(empty)).isFalse();
     }
 
     private Run<?, ?> mockBuild(final int number,

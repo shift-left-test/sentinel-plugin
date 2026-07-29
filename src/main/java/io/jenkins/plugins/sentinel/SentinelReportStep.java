@@ -7,7 +7,7 @@ package io.jenkins.plugins.sentinel;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -19,6 +19,8 @@ import hudson.Launcher;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.util.ListBoxModel;
+import io.jenkins.plugins.sentinel.config.SentinelConfigValidator;
+import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
 import io.jenkins.plugins.sentinel.config.ThresholdAction;
 import org.jenkinsci.plugins.workflow.flow.StashManager;
 import org.jenkinsci.plugins.workflow.steps.Step;
@@ -46,6 +48,9 @@ public class SentinelReportStep extends Step implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    /** Partition total meaning "this run was not partitioned". */
+    private static final int UNPARTITIONED = 0;
+
     private Double threshold;
     private String thresholdAction;
     private String sourceDir;
@@ -54,14 +59,153 @@ public class SentinelReportStep extends Step implements Serializable {
     private Integer partitionTotal;
 
     /**
+     * Creates a new SentinelReportStep with no required parameters.
+     */
+    @DataBoundConstructor
+    public SentinelReportStep() {
+        super();
+    }
+
+    public Double getThreshold() {
+        return threshold;
+    }
+
+    public String getThresholdAction() {
+        return thresholdAction;
+    }
+
+    public String getSourceDir() {
+        return sourceDir;
+    }
+
+    public String getOutputDir() {
+        return outputDir;
+    }
+
+    public String getSentinelPath() {
+        return sentinelPath;
+    }
+
+    public Integer getPartitionTotal() {
+        return partitionTotal;
+    }
+
+    @DataBoundSetter
+    public void setThreshold(final Double v) {
+        threshold = v;
+    }
+
+    @DataBoundSetter
+    public void setThresholdAction(final String v) {
+        thresholdAction = v;
+    }
+
+    @DataBoundSetter
+    public void setSourceDir(final String v) {
+        sourceDir = v;
+    }
+
+    @DataBoundSetter
+    public void setOutputDir(final String v) {
+        outputDir = v;
+    }
+
+    @DataBoundSetter
+    public void setSentinelPath(final String v) {
+        sentinelPath = v;
+    }
+
+    @DataBoundSetter
+    public void setPartitionTotal(final Integer v) {
+        partitionTotal = v;
+    }
+
+    /**
+     * Builds the merged configuration: environment variables first, then
+     * any step parameter that was given.
+     *
+     * <p>The report step goes through the same
+     * {@link SentinelConfiguration} as {@code sentinelRun} so that
+     * {@link SentinelConfigValidator} actually runs against its
+     * parameters - notably the threshold range and the
+     * threshold/thresholdAction pairing, which are otherwise never
+     * checked.</p>
+     *
+     * @param env environment variables
+     * @return populated SentinelConfiguration
+     * @throws IllegalArgumentException if {@code thresholdAction} is not a
+     *                                  valid action
+     */
+    SentinelConfiguration toConfiguration(final Map<String, String> env) {
+        final SentinelConfiguration config =
+                SentinelEnvironment.toConfiguration(env);
+        SentinelEnvironment.override(sourceDir, config::setSourceDir);
+        SentinelEnvironment.override(outputDir, config::setOutputDir);
+        SentinelEnvironment.override(sentinelPath, config::setSentinelPath);
+        SentinelEnvironment.override(
+                partitionTotal, config::setPartitionTotal);
+        SentinelEnvironment.override(threshold, config::setThreshold);
+        if (SentinelEnvironment.isSet(thresholdAction)) {
+            config.setThresholdAction(
+                    ThresholdAction.fromString(thresholdAction));
+        }
+        return config;
+    }
+
+    /**
+     * Returns how many partitions to collect.
+     *
+     * @param config validated configuration
+     * @return the partition total, or 0 when the run was not partitioned
+     */
+    static int partitionCount(final SentinelConfiguration config) {
+        final Integer total = config.getPartitionTotal();
+        return total != null ? total : UNPARTITIONED;
+    }
+
+    String managedOutputDirForCleanup(final Map<String, String> env) {
+        return SentinelEnvironment.managedDefault(
+                outputDir,
+                env.get(SentinelEnvironment.OUTPUT_DIR),
+                SentinelEnvironment.DEFAULT_OUTPUT_DIR);
+    }
+
+    void prepareManagedOutputDir(
+            final FilePath ws,
+            final Map<String, String> env,
+            final TaskListener listener) throws Exception {
+        SentinelWorkspaceCleaner.recreateIfManaged(
+                ws, managedOutputDirForCleanup(env),
+                listener, "report output directory");
+    }
+
+    /**
+     * Returns the single-mode unstash directory when the plugin owns it.
+     *
+     * <p>The report step has no {@code workspace} parameter, so only
+     * {@code SENTINEL_WORKSPACE} can move this directory.</p>
+     *
+     * @param env environment variables
+     * @return the managed directory, or null when the user chose it
+     */
+    static String managedSingleWorkspaceForCleanup(
+            final Map<String, String> env) {
+        return SentinelEnvironment.managedDefault(
+                null,
+                env.get(SentinelEnvironment.WORKSPACE),
+                SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE);
+    }
+
+    /**
      * Unstashes single (non-partitioned) results into the
      * workspace subdirectory.
      *
-     * @param build   current build
-     * @param ws      workspace root
+     * @param build    current build
+     * @param ws       workspace root
      * @param launcher launcher
-     * @param env     environment variables
+     * @param env      environment variables
      * @param listener build listener
+     * @param config   validated configuration
      * @throws Exception if unstash fails
      */
     static void unstashSingle(
@@ -69,26 +213,19 @@ public class SentinelReportStep extends Step implements Serializable {
             final FilePath ws,
             final Launcher launcher,
             final EnvVars env,
-            final TaskListener listener) throws Exception {
-        final String envWs =
-                env.get(SentinelEnvironment.WORKSPACE);
-        final String workspace =
-                envWs != null && !envWs.isEmpty()
-                        ? envWs
-                        : SentinelEnvironment
-                                .DEFAULT_SINGLE_WORKSPACE;
-        if (envWs == null || envWs.isEmpty()) {
-            SentinelWorkspaceCleaner.recreateDirectory(
-                    ws.child(workspace),
-                    listener,
-                    "single unstash directory");
-        }
+            final TaskListener listener,
+            final SentinelConfiguration config) throws Exception {
+        SentinelWorkspaceCleaner.recreateIfManaged(
+                ws, managedSingleWorkspaceForCleanup(env),
+                listener, "single unstash directory");
+        final String target =
+                SentinelEnvironment.effectiveSingleWorkspace(config);
         listener.getLogger().printf(
-                "[Sentinel] Unstashing %s%n",
-                SentinelEnvironment.SINGLE_STASH_NAME);
+                "[Sentinel] Unstashing %s into %s%n",
+                SentinelEnvironment.SINGLE_STASH_NAME, target);
         StashManager.unstash(build,
                 SentinelEnvironment.SINGLE_STASH_NAME,
-                ws.child(workspace),
+                ws.child(target),
                 launcher, env, listener);
     }
 
@@ -126,7 +263,7 @@ public class SentinelReportStep extends Step implements Serializable {
                 StashManager.unstash(build, name,
                         target,
                         launcher, env, listener);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 final AbortException error = new AbortException(
                         "Sentinel partition " + i + " of " + total
                                 + " could not be collected (stash '" + name
@@ -136,142 +273,6 @@ public class SentinelReportStep extends Step implements Serializable {
                 error.initCause(e);
                 throw error;
             }
-        }
-    }
-
-    /**
-     * Creates a new SentinelReportStep with no required parameters.
-     */
-    @DataBoundConstructor
-    public SentinelReportStep() {
-        super();
-    }
-
-    public Double getThreshold() {
-        return threshold;
-    }
-
-    public String getThresholdAction() {
-        return thresholdAction;
-    }
-
-    public String getSourceDir() {
-        return sourceDir;
-    }
-
-    public String getOutputDir() {
-        return outputDir;
-    }
-
-    public String getSentinelPath() {
-        return sentinelPath;
-    }
-
-    @DataBoundSetter
-    public void setThreshold(final Double v) {
-        threshold = v;
-    }
-
-    @DataBoundSetter
-    public void setThresholdAction(final String v) {
-        thresholdAction = v;
-    }
-
-    @DataBoundSetter
-    public void setSourceDir(final String v) {
-        sourceDir = v;
-    }
-
-    @DataBoundSetter
-    public void setOutputDir(final String v) {
-        outputDir = v;
-    }
-
-    @DataBoundSetter
-    public void setSentinelPath(final String v) {
-        sentinelPath = v;
-    }
-
-    public Integer getPartitionTotal() {
-        return partitionTotal;
-    }
-
-    @DataBoundSetter
-    public void setPartitionTotal(final Integer v) {
-        partitionTotal = v;
-    }
-
-    /**
-     * Parses {@code SENTINEL_PARTITION_TOTAL} from the environment.
-     *
-     * @param env environment variables
-     * @return the partition total, or 0 when the variable is unset
-     * @throws IllegalArgumentException if the value is not a positive
-     *                                  integer
-     */
-    static int parsePartitionTotal(final EnvVars env) {
-        final String value = env.get(SentinelEnvironment.PARTITION_TOTAL);
-        if (value == null || value.isBlank()) {
-            return 0;
-        }
-        final String error = SentinelEnvironment.PARTITION_TOTAL
-                + " must be a positive integer, got: " + value;
-        final int total;
-        try {
-            total = Integer.parseInt(value.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(error, e);
-        }
-        if (total <= 0) {
-            throw new IllegalArgumentException(error);
-        }
-        return total;
-    }
-
-    /**
-     * Resolves the partition total, preferring the step parameter
-     * and falling back to the
-     * {@code SENTINEL_PARTITION_TOTAL} env var.
-     *
-     * @param env environment variables
-     * @return the partition total, or 0 when neither is set
-     * @throws IllegalArgumentException if the parameter is not
-     *                                  positive
-     */
-    int resolvePartitionTotal(final EnvVars env) {
-        if (partitionTotal == null) {
-            return parsePartitionTotal(env);
-        }
-        if (partitionTotal <= 0) {
-            throw new IllegalArgumentException(
-                    "partitionTotal must be a positive"
-                            + " integer, got: "
-                            + partitionTotal);
-        }
-        return partitionTotal;
-    }
-
-    String managedOutputDirForCleanup(final EnvVars env) {
-        if (outputDir != null) {
-            return null;
-        }
-        final String envOutputDir = env.get(SentinelEnvironment.OUTPUT_DIR);
-        if (envOutputDir != null && !envOutputDir.isEmpty()) {
-            return null;
-        }
-        return SentinelEnvironment.DEFAULT_OUTPUT_DIR;
-    }
-
-    void prepareManagedOutputDir(
-            final FilePath ws,
-            final EnvVars env,
-            final TaskListener listener) throws Exception {
-        final String managedOutputDir = managedOutputDirForCleanup(env);
-        if (managedOutputDir != null) {
-            SentinelWorkspaceCleaner.recreateDirectory(
-                    ws.child(managedOutputDir),
-                    listener,
-                    "report output directory");
         }
     }
 
@@ -294,106 +295,59 @@ public class SentinelReportStep extends Step implements Serializable {
 
         @Override
         protected Void run() throws Exception {
-            final TaskListener listener = getContext()
-                    .get(TaskListener.class);
-            final FilePath ws = getContext().get(FilePath.class);
-            final Launcher launcher = getContext()
-                    .get(Launcher.class);
-            final EnvVars env = getContext().get(EnvVars.class);
-            final Run<?, ?> build = getContext().get(Run.class);
+            final Inputs in = inputs();
 
-            SentinelEnvironment.warnUnknownVariables(
-                    env, listener.getLogger());
+            // Build and validate before any work: an out-of-range
+            // threshold or a misspelled thresholdAction must fail now,
+            // not after the partitions have been unstashed and merged.
+            final SentinelConfiguration config =
+                    step.toConfiguration(in.env());
+            SentinelConfigValidator.validate(config);
 
-            final String sentinelCmd = resolveSentinelPath(env);
-            final int partitionTotal =
-                    step.resolvePartitionTotal(env);
-            final String reportWorkspace;
+            final String sentinelCmd = SentinelGlobalConfiguration
+                    .getEffectivePath(config.getSentinelPath());
+            final int total = partitionCount(config);
+            final String reportWorkspace = total > UNPARTITIONED
+                    ? collectPartitions(in, sentinelCmd, total)
+                    : collectSingle(in, config);
 
-            if (partitionTotal > 0) {
-                unstashPartitions(build, ws, launcher, env,
-                        listener, partitionTotal);
-                SentinelWorkspaceCleaner.recreateDirectory(
-                        ws.child(SentinelEnvironment.MERGED_WORKSPACE),
-                        listener,
-                        "merged workspace");
-                mergePartitions(sentinelCmd, ws, launcher,
-                        listener, env, partitionTotal);
-                reportWorkspace =
-                        SentinelEnvironment.MERGED_WORKSPACE;
-            } else {
-                unstashSingle(build, ws, launcher, env, listener);
-                reportWorkspace = resolveWorkspace(env);
-            }
-
-            final String srcDir = resolveSourceDir(env);
-            final String outDir = resolveOutputDir(env);
-            final ThresholdAction action =
-                    step.thresholdAction != null
-                            ? ThresholdAction.fromString(
-                            step.thresholdAction)
-                            : null;
-            step.prepareManagedOutputDir(ws, env, listener);
+            step.prepareManagedOutputDir(
+                    in.ws(), in.env(), in.listener());
 
             SentinelPostProcessor.reportAndJudge(
-                    sentinelCmd, reportWorkspace, srcDir,
-                    outDir, step.threshold, action,
-                    env, ws, launcher, listener, build, procHandle);
+                    sentinelCmd, reportWorkspace,
+                    SentinelEnvironment.effectiveSourceDir(config),
+                    SentinelEnvironment.effectiveOutputDir(config),
+                    config.getThreshold(), config.getThresholdAction(),
+                    in.env(), in.ws(), in.launcher(), in.listener(),
+                    in.build(), procHandle);
 
             return null;
         }
 
-        private void mergePartitions(
-                final String sentinelCmd,
-                final FilePath ws,
-                final Launcher launcher,
-                final TaskListener listener,
-                final EnvVars env,
-                final int total) throws Exception {
-            final List<String> paths =
-                    SentinelPostProcessor.partitionPaths(total);
+        private String collectPartitions(final Inputs in,
+                                         final String sentinelCmd,
+                                         final int total) throws Exception {
+            unstashPartitions(in.build(), in.ws(), in.launcher(),
+                    in.env(), in.listener(), total);
+            SentinelWorkspaceCleaner.recreateDirectory(
+                    in.ws().child(SentinelEnvironment.MERGED_WORKSPACE),
+                    in.listener(), "merged workspace");
             SentinelPostProcessor.merge(
-                    sentinelCmd, paths,
+                    sentinelCmd,
+                    SentinelPostProcessor.partitionPaths(total),
                     SentinelEnvironment.MERGED_WORKSPACE,
-                    env, ws, launcher, listener, procHandle);
+                    in.env(), in.ws(), in.launcher(), in.listener(),
+                    procHandle);
+            return SentinelEnvironment.MERGED_WORKSPACE;
         }
 
-        private String resolveSourceDir(final EnvVars env) {
-            return resolve(step.sourceDir,
-                    env.get(SentinelEnvironment.SOURCE_DIR),
-                    SentinelEnvironment.DEFAULT_SOURCE_DIR);
-        }
-
-        private String resolveOutputDir(final EnvVars env) {
-            return resolve(step.outputDir,
-                    env.get(SentinelEnvironment.OUTPUT_DIR),
-                    SentinelEnvironment.DEFAULT_OUTPUT_DIR);
-        }
-
-        private String resolveSentinelPath(final EnvVars env) {
-            final String resolved = resolve(step.sentinelPath,
-                    env.get(SentinelEnvironment.PATH), null);
-            return SentinelGlobalConfiguration
-                    .getEffectivePath(resolved);
-        }
-
-        private String resolveWorkspace(final EnvVars env) {
-            return resolve(null,
-                    env.get(SentinelEnvironment.WORKSPACE),
-                    SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE);
-        }
-
-        private static String resolve(
-                final String stepValue,
-                final String envValue,
-                final String defaultValue) {
-            if (stepValue != null) {
-                return stepValue;
-            }
-            if (envValue != null && !envValue.isEmpty()) {
-                return envValue;
-            }
-            return defaultValue;
+        private String collectSingle(final Inputs in,
+                                     final SentinelConfiguration config)
+                throws Exception {
+            unstashSingle(in.build(), in.ws(), in.launcher(),
+                    in.env(), in.listener(), config);
+            return SentinelEnvironment.effectiveSingleWorkspace(config);
         }
     }
 
@@ -431,10 +385,7 @@ public class SentinelReportStep extends Step implements Serializable {
 
         @Override
         public Set<? extends Class<?>> getRequiredContext() {
-            return Set.of(
-                    FilePath.class, Launcher.class,
-                    TaskListener.class, EnvVars.class,
-                    Run.class);
+            return SentinelStepExecution.REQUIRED_CONTEXT;
         }
     }
 }

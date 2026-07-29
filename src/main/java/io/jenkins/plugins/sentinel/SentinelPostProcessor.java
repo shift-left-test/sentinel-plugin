@@ -7,17 +7,20 @@ package io.jenkins.plugins.sentinel;
 
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import hudson.AbortException;
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import io.jenkins.plugins.sentinel.config.ThresholdAction;
+import io.jenkins.plugins.sentinel.model.MutationScore;
 import io.jenkins.plugins.sentinel.model.SentinelResult;
 
 /**
@@ -26,7 +29,6 @@ import io.jenkins.plugins.sentinel.model.SentinelResult;
  */
 
 final class SentinelPostProcessor {
-
 
     private SentinelPostProcessor() {
     }
@@ -43,46 +45,6 @@ final class SentinelPostProcessor {
             paths.add(SentinelEnvironment.partitionWorkspace(i));
         }
         return paths;
-    }
-
-    /**
-     * Builds the full merge command including the sentinel executable.
-     *
-     * @param sentinelCmd     path to sentinel executable
-     * @param partitionPaths  list of partition workspace paths
-     * @param targetWorkspace destination workspace for merged result
-     * @return full argument list
-     */
-    static List<String> buildMergeCommand(
-            final String sentinelCmd,
-            final List<String> partitionPaths,
-            final String targetWorkspace) {
-        final List<String> args = new ArrayList<>();
-        args.add(sentinelCmd);
-        args.addAll(SentinelCommandBuilder.buildMergeArgs(
-                partitionPaths, targetWorkspace));
-        return args;
-    }
-
-    /**
-     * Builds the full report command including the sentinel executable.
-     *
-     * @param sentinelCmd sentinel executable path
-     * @param workspace   sentinel workspace directory
-     * @param sourceDir   source code directory
-     * @param outputDir   output directory for reports
-     * @return full argument list
-     */
-    static List<String> buildReportCommand(
-            final String sentinelCmd,
-            final String workspace,
-            final String sourceDir,
-            final String outputDir) {
-        final List<String> args = new ArrayList<>();
-        args.add(sentinelCmd);
-        args.addAll(SentinelCommandBuilder.buildReportArgs(
-                workspace, sourceDir, outputDir));
-        return args;
     }
 
     /**
@@ -107,9 +69,11 @@ final class SentinelPostProcessor {
             final Launcher launcher,
             final TaskListener listener,
             final SentinelProcHandle procHandle) throws Exception {
-        final List<String> args = buildMergeCommand(
-                sentinelCmd, partitionPaths, targetWorkspace);
-        SentinelRunner.run(args, env, ws, launcher, listener, procHandle);
+        SentinelRunner.run(
+                sentinelCmd,
+                SentinelCommandBuilder.buildMergeArgs(
+                        partitionPaths, targetWorkspace),
+                env, ws, launcher, listener, procHandle);
     }
 
     /**
@@ -144,10 +108,11 @@ final class SentinelPostProcessor {
             final TaskListener listener,
             final Run<?, ?> build,
             final SentinelProcHandle procHandle) throws Exception {
-        final List<String> reportArgs = buildReportCommand(
-                sentinelCmd, workspace, sourceDir, outputDir);
-        SentinelRunner.run(reportArgs, env, ws, launcher, listener,
-                procHandle);
+        SentinelRunner.run(
+                sentinelCmd,
+                SentinelCommandBuilder.buildReportArgs(
+                        workspace, sourceDir, outputDir),
+                env, ws, launcher, listener, procHandle);
 
         final Path archiveDir = build.getRootDir().toPath()
                 .resolve(SentinelEnvironment.ARCHIVE_DIR);
@@ -156,46 +121,85 @@ final class SentinelPostProcessor {
                 new FilePath(archiveDir.toFile());
         remoteOutput.copyRecursiveTo(localArchive);
 
-        final Path xmlFile = archiveDir.resolve(
-                SentinelEnvironment.MUTATIONS_XML);
-        final SentinelResult result;
-        try (InputStream in = Files.newInputStream(xmlFile)) {
-            result = SentinelResultParser.parse(in);
-        }
+        final SentinelResult result = parseArchivedResult(archiveDir);
 
         final SentinelBuildAction action =
                 new SentinelBuildAction(result);
         action.setRun(build);
         build.addAction(action);
 
+        final MutationScore score = result.overallScore();
         listener.getLogger().printf(
-                "[Sentinel] Score: %.1f%% "
-                        + "(killed=%d, survived=%d, "
-                        + "skipped=%d)%n",
-                result.overallScore().score(),
-                result.overallScore().killed(),
-                result.overallScore().survived(),
-                result.overallScore().skipped());
+                "[Sentinel] Score: %s%% "
+                        + "(killed=%d, survived=%d, skipped=%d)%n",
+                score.formattedScore(), score.killed(),
+                score.survived(), score.skipped());
+        warnIfNothingEvaluated(listener, score);
 
-        applyThreshold(listener, build, result,
+        applyThreshold(listener, build, score,
                 threshold, thresholdAction);
+    }
+
+    /**
+     * Reads the archived mutations.xml, failing with the path when sentinel
+     * produced no result file rather than surfacing a bare
+     * NoSuchFileException.
+     */
+    private static SentinelResult parseArchivedResult(final Path archiveDir)
+            throws Exception {
+        final Path xmlFile = archiveDir.resolve(
+                SentinelEnvironment.MUTATIONS_XML);
+        try (InputStream in = Files.newInputStream(xmlFile)) {
+            return SentinelResultParser.parse(in);
+        } catch (final NoSuchFileException e) {
+            final AbortException error = new AbortException(
+                    "sentinel produced no "
+                            + SentinelEnvironment.MUTATIONS_XML + " ("
+                            + xmlFile + "). The report step ran, but its"
+                            + " output directory holds no results - check"
+                            + " that the unstashed workspace actually"
+                            + " contains a completed sentinel run.");
+            error.initCause(e);
+            throw error;
+        }
+    }
+
+    /**
+     * Warns when every mutant was skipped, so a resulting threshold
+     * failure is not misread as a test gap.
+     *
+     * <p>{@link MutationScore#score()} is 0.0 when nothing was evaluated,
+     * which trips any threshold. The cause is a broken build, a timeout,
+     * or a runtime error - not tests that failed to kill mutants - and the
+     * log has to say so or the user chases the wrong problem.</p>
+     */
+    private static void warnIfNothingEvaluated(
+            final TaskListener listener, final MutationScore score) {
+        if (score.total() == 0 && score.skipped() > 0) {
+            listener.getLogger().printf(
+                    "[Sentinel] WARNING: all %d mutants were skipped, so no"
+                            + " mutant was actually evaluated. The score is"
+                            + " 0.0%% by definition here, not a test gap -"
+                            + " check the build/test commands for failures,"
+                            + " timeouts, or runtime errors.%n",
+                    score.skipped());
+        }
     }
 
     private static void applyThreshold(
             final TaskListener listener,
             final Run<?, ?> build,
-            final SentinelResult result,
+            final MutationScore score,
             final Double threshold,
             final ThresholdAction thresholdAction) {
         if (threshold == null || thresholdAction == null) {
             return;
         }
-        final double score = result.overallScore().score();
-        if (score < threshold) {
+        if (score.score() < threshold) {
             listener.getLogger().printf(
-                    "[Sentinel] Score %.1f%% is below "
+                    "[Sentinel] Score %s%% is below "
                             + "threshold %.1f%% -> %s%n",
-                    score, threshold, thresholdAction);
+                    score.formattedScore(), threshold, thresholdAction);
             switch (thresholdAction) {
                 case FAILURE ->
                         build.setResult(Result.FAILURE);

@@ -17,7 +17,10 @@ import org.kohsuke.stapler.DataBoundSetter;
 @Extension
 public class SentinelGlobalConfiguration extends GlobalConfiguration {
 
-    private String sentinelPath = "sentinel";
+    /** Executable name used when nothing else is configured. */
+    static final String DEFAULT_PATH = "sentinel";
+
+    private String sentinelPath = DEFAULT_PATH;
 
     /**
      * Loads the saved configuration.
@@ -60,17 +63,21 @@ public class SentinelGlobalConfiguration extends GlobalConfiguration {
      * Returns the effective sentinel path, considering
      * a per-job override.
      *
-     * @param jobOverride job-level override (may be null or empty)
-     * @return effective sentinel executable path
+     * <p>Falls back to {@value #DEFAULT_PATH} whenever neither source
+     * yields a usable value. An administrator who clears the global field
+     * leaves it blank rather than null, and launching a blank program name
+     * fails with an opaque error, so blank is treated as unset here.</p>
+     *
+     * @param jobOverride job-level override (may be null or blank)
+     * @return effective sentinel executable path, never blank
      */
     public static String getEffectivePath(final String jobOverride) {
-        if (jobOverride != null && !jobOverride.isEmpty()) {
+        if (SentinelEnvironment.isSet(jobOverride)) {
             return jobOverride;
         }
         final SentinelGlobalConfiguration global = get();
-        if (global != null) {
-            return global.getSentinelPath();
-        }
-        return "sentinel";
+        final String configured =
+                global != null ? global.getSentinelPath() : null;
+        return SentinelEnvironment.orDefault(configured, DEFAULT_PATH);
     }
 }

@@ -64,8 +64,6 @@ public class SentinelBuildAction implements RunAction2 {
                     + "img-src 'self' data:; "
                     + "style-src 'unsafe-inline'; "
                     + "script-src 'unsafe-inline';";
-    /** Multiplier for percent calculation. */
-    private static final int PERCENT = 100;
 
     /** The mutation testing result attached to this build. */
     private final SentinelResult result;
@@ -163,10 +161,10 @@ public class SentinelBuildAction implements RunAction2 {
      * Returns total mutant count including skipped.
      *
      * @return killed + survived + skipped
+     * @see MutationScore#totalWithSkipped()
      */
     public int getTotalWithSkipped() {
-        final MutationScore score = result.overallScore();
-        return score.killed() + score.survived() + score.skipped();
+        return result.overallScore().totalWithSkipped();
     }
 
     /**
@@ -176,7 +174,8 @@ public class SentinelBuildAction implements RunAction2 {
      * @return killed percent
      */
     public int getKilledPercent() {
-        return percentOf(result.overallScore().killed());
+        final MutationScore score = result.overallScore();
+        return score.percentOf(score.killed());
     }
 
     /**
@@ -186,7 +185,8 @@ public class SentinelBuildAction implements RunAction2 {
      * @return survived percent
      */
     public int getSurvivedPercent() {
-        return percentOf(result.overallScore().survived());
+        final MutationScore score = result.overallScore();
+        return score.percentOf(score.survived());
     }
 
     /**
@@ -196,7 +196,8 @@ public class SentinelBuildAction implements RunAction2 {
      * @return skipped percent
      */
     public int getSkippedPercent() {
-        return percentOf(result.overallScore().skipped());
+        final MutationScore score = result.overallScore();
+        return score.percentOf(score.skipped());
     }
 
     /**
@@ -240,7 +241,7 @@ public class SentinelBuildAction implements RunAction2 {
         rsp.setContentType("text/html;charset=UTF-8");
         try {
             Files.copy(htmlFile, rsp.getOutputStream());
-        } catch (NoSuchFileException e) {
+        } catch (final NoSuchFileException e) {
             rsp.sendError(
                     StaplerResponse2.SC_NOT_FOUND,
                     "HTML report not found");
@@ -265,14 +266,6 @@ public class SentinelBuildAction implements RunAction2 {
         return run.getRootDir().toPath()
                 .resolve(SentinelEnvironment.ARCHIVE_DIR)
                 .resolve(SentinelEnvironment.HTML_REPORT_FILE);
-    }
-
-    private int percentOf(final int count) {
-        final int total = getTotalWithSkipped();
-        if (total == 0) {
-            return 0;
-        }
-        return count * PERCENT / total;
     }
 
     /**

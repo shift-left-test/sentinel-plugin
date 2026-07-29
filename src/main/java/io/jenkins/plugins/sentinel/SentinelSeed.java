@@ -44,7 +44,7 @@ public final class SentinelSeed {
         try {
             return MessageDigest.getInstance("SHA-256")
                     .digest(input.getBytes(StandardCharsets.UTF_8));
-        } catch (NoSuchAlgorithmException e) {
+        } catch (final NoSuchAlgorithmException e) {
             throw new IllegalStateException(
                     "SHA-256 unavailable despite being JDK-mandatory",
                     e);

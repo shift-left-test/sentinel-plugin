@@ -15,6 +15,30 @@ import org.junit.jupiter.api.Test;
 class SentinelConfigurationTest {
 
     @Test
+    void nullListSettersFallBackToEmptyLists() {
+        final SentinelConfiguration config = new SentinelConfiguration();
+        config.setPatterns(null);
+        config.setExtensions(null);
+        config.setOperators(null);
+        config.setLcovTracefiles(null);
+
+        assertThat(config.getPatterns()).isEmpty();
+        assertThat(config.getExtensions()).isEmpty();
+        assertThat(config.getOperators()).isEmpty();
+        assertThat(config.getLcovTracefiles()).isEmpty();
+    }
+
+    @Test
+    void listSettersCopyTheirInput() {
+        final SentinelConfiguration config = new SentinelConfiguration();
+        final List<String> source = new ArrayList<>(List.of("a"));
+        config.setPatterns(source);
+        source.add("b");
+
+        assertThat(config.getPatterns()).containsExactly("a");
+    }
+
+    @Test
     void partitionSpecReturnsNullWhenIndexNull() {
         final SentinelConfiguration config = new SentinelConfiguration();
         config.setPartitionTotal(4);

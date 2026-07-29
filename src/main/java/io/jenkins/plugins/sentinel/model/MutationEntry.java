@@ -64,31 +64,6 @@ public final class MutationEntry implements Serializable {
     }
 
     /**
-     * Creates a skipped mutation entry (not detected, no killing test).
-     *
-     * @param sourceFile     source file name
-     * @param sourceFilePath source file path
-     * @param mutatedClass   mutated class name
-     * @param mutatedMethod  mutated method name
-     * @param lineNumber     line number
-     * @param mutator        mutator name
-     * @return skipped MutationEntry
-     */
-    public static MutationEntry skippedEntry(
-            final String sourceFile,
-            final String sourceFilePath,
-            final String mutatedClass,
-            final String mutatedMethod,
-            final int lineNumber,
-            final String mutator) {
-        return new MutationEntry(
-                sourceFile, sourceFilePath,
-                mutatedClass, mutatedMethod,
-                lineNumber, mutator,
-                false, true, null);
-    }
-
-    /**
      * Returns the source file name.
      *
      * @return source file name

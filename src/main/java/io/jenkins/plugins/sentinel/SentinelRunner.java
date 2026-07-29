@@ -5,6 +5,7 @@
 
 package io.jenkins.plugins.sentinel;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -26,30 +27,40 @@ final class SentinelRunner {
     /**
      * Runs a sentinel command and throws if the exit code is non-zero.
      *
+     * <p>Takes the executable separately from its arguments so the
+     * {@link SentinelCommandBuilder} methods stay purely about arguments
+     * and no caller has to prepend the executable itself.</p>
+     *
      * <p>The started {@link Proc} is registered with {@code procHandle}
      * so the owning step's {@code stop()} can kill it on abort.</p>
      *
-     * @param args       full argument list including the sentinel executable
-     * @param env        environment variables
-     * @param ws         working directory
-     * @param launcher   Jenkins launcher
-     * @param listener   task listener for log output
-     * @param procHandle handle that receives the started process
+     * @param sentinelCmd path to the sentinel executable
+     * @param args        arguments to pass to sentinel
+     * @param env         environment variables
+     * @param ws          working directory
+     * @param launcher    Jenkins launcher
+     * @param listener    task listener for log output
+     * @param procHandle  handle that receives the started process
      * @throws AbortException if the process exits with a non-zero code
      * @throws Exception      if the process fails to launch
      */
     static void run(
+            final String sentinelCmd,
             final List<String> args,
             final Map<String, String> env,
             final FilePath ws,
             final Launcher launcher,
             final TaskListener listener,
             final SentinelProcHandle procHandle) throws Exception {
+        final List<String> command = new ArrayList<>();
+        command.add(sentinelCmd);
+        command.addAll(args);
+
         listener.getLogger().println(
-                "[Sentinel] Running: " + String.join(" ", args));
+                "[Sentinel] Running: " + String.join(" ", command));
 
         final Proc proc = launcher.launch()
-                .cmds(args)
+                .cmds(command)
                 .envs(env)
                 .stdout(listener)
                 .stderr(listener.getLogger())

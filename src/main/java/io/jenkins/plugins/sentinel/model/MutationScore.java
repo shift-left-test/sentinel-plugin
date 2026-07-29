@@ -83,6 +83,33 @@ public final class MutationScore implements Serializable {
     }
 
     /**
+     * Returns every mutant sentinel produced, including skipped ones.
+     *
+     * <p>This is the denominator for the stacked status bar, which shows
+     * how the run was spent; {@link #total()} is the denominator for the
+     * score, which measures only mutants that were actually evaluated.</p>
+     *
+     * @return killed + survived + skipped
+     */
+    public int totalWithSkipped() {
+        return killedCount + survivedCount + skippedCount;
+    }
+
+    /**
+     * Returns a count as a whole percentage of {@link #totalWithSkipped()}.
+     *
+     * @param count one of the status counts
+     * @return the percentage, or 0 when there are no mutants at all
+     */
+    public int percentOf(final int count) {
+        final int total = totalWithSkipped();
+        if (total == 0) {
+            return 0;
+        }
+        return count * (int) HUNDRED / total;
+    }
+
+    /**
      * Returns mutation score as percentage (0.0 to 100.0).
      * Returns 0.0 if total is zero.
      *
@@ -138,19 +165,6 @@ public final class MutationScore implements Serializable {
             return "#fe820a";
         }
         return "#e6001f";
-    }
-
-    /**
-     * Merges this score with another by summing counts.
-     *
-     * @param other the other score to merge with
-     * @return new merged MutationScore
-     */
-    public MutationScore merge(final MutationScore other) {
-        return new MutationScore(
-                killedCount + other.killedCount,
-                survivedCount + other.survivedCount,
-                skippedCount + other.skippedCount);
     }
 
     @Override

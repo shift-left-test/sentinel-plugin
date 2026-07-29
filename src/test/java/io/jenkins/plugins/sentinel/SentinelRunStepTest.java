@@ -33,6 +33,7 @@ class SentinelRunStepTest {
     private static final String ENV_PARTITION_TOTAL =
             "SENTINEL_PARTITION_TOTAL";
     private static final String ENV_SEED = "SENTINEL_SEED";
+    private static final String ENV_WORKSPACE = "SENTINEL_WORKSPACE";
     private static final String TEST_RESULT = "test-results/";
     private static final long SEED_VALUE = 12_345L;
     private static final String CUSTOM_WORKSPACE = "custom-ws";
@@ -114,7 +115,7 @@ class SentinelRunStepTest {
         env.put("SENTINEL_SOURCE_DIR", "env-src");
         env.put(ENV_SEED, "111");
         env.put("SENTINEL_VERBOSE", "false");
-        env.put("SENTINEL_WORKSPACE", ".env-ws");
+        env.put(ENV_WORKSPACE, ".env-ws");
         env.put("SENTINEL_PATH", "/usr/bin/sentinel");
 
         final SentinelConfiguration config =
@@ -265,7 +266,7 @@ class SentinelRunStepTest {
     void managedWorkspaceForCleanupSkipsEnvWorkspace() {
         final SentinelRunStep step = new SentinelRunStep();
         final Map<String, String> env = new HashMap<>();
-        env.put("SENTINEL_WORKSPACE", CUSTOM_WORKSPACE);
+        env.put(ENV_WORKSPACE, CUSTOM_WORKSPACE);
 
         assertThat(step.managedWorkspaceForCleanup(env)).isNull();
     }
@@ -306,6 +307,58 @@ class SentinelRunStepTest {
         step.prepareManagedWorkspace(ws, Map.of(), listener);
 
         assertThat(custom.child(STALE_FILE).exists()).isTrue();
+    }
+
+    @Test
+    void blankEnvWorkspaceStillAutoAssignsThePartitionWorkspace() {
+        // SENTINEL_WORKSPACE='' used to read as "set", which suppressed the
+        // auto-assignment and left the partition stashing an empty
+        // directory sentinel never wrote to.
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionIndex(2);
+        step.setPartitionTotal(4);
+
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_WORKSPACE, "");
+
+        final SentinelConfiguration config = step.toConfiguration(env);
+        assertThat(config.getWorkspace()).isEqualTo(".sentinel-2");
+        assertThat(SentinelEnvironment.effectiveSingleWorkspace(config))
+                .isEqualTo(".sentinel-2");
+    }
+
+    @Test
+    void managedWorkspaceForCleanupTreatsBlankEnvAsUnset() {
+        final SentinelRunStep step = new SentinelRunStep();
+        final Map<String, String> env = new HashMap<>();
+        env.put(ENV_WORKSPACE, "  ");
+
+        assertThat(step.managedWorkspaceForCleanup(env))
+                .isEqualTo(SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE);
+    }
+
+    @Test
+    void explicitWorkspaceIsWhatGetsStashed() {
+        // An explicit workspace beats the partition default, and the stash
+        // must follow the directory sentinel was told to write to.
+        final SentinelRunStep step = new SentinelRunStep();
+        step.setPartitionIndex(2);
+        step.setPartitionTotal(4);
+        step.setWorkspace(CUSTOM_WORKSPACE);
+
+        final SentinelConfiguration config =
+                step.toConfiguration(Map.of());
+        assertThat(config.getWorkspace()).isEqualTo(CUSTOM_WORKSPACE);
+        assertThat(SentinelEnvironment.effectiveSingleWorkspace(config))
+                .isEqualTo(CUSTOM_WORKSPACE);
+    }
+
+    @Test
+    void unpartitionedRunStashesTheDefaultWorkspace() {
+        final SentinelConfiguration config =
+                new SentinelRunStep().toConfiguration(Map.of());
+        assertThat(SentinelEnvironment.effectiveSingleWorkspace(config))
+                .isEqualTo(SentinelEnvironment.DEFAULT_SINGLE_WORKSPACE);
     }
 
     @Test

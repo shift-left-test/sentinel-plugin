@@ -7,6 +7,11 @@ package io.jenkins.plugins.sentinel.config;
 
 /**
  * Validates a SentinelConfiguration for required fields and value ranges.
+ *
+ * <p>Both {@code sentinelRun} and {@code sentinelReport} run this against
+ * their merged configuration before doing any work, so a bad parameter
+ * fails the build immediately rather than after an expensive mutation run
+ * or partition merge.</p>
  */
 
 public final class SentinelConfigValidator {
@@ -29,32 +34,59 @@ public final class SentinelConfigValidator {
         validateNonNegative(config.getMutantsPerLine(), "mutantsPerLine");
         validateNonNegative(config.getLimit(), "limit");
         validateSeed(config.getSeed());
+        validatePartition(config);
+        validateThreshold(config);
+    }
 
-        if (config.getPartitionIndex() != null) {
-            if (config.getPartitionTotal() == null) {
-                throw new IllegalArgumentException(
-                        "partitionTotal is required when partitionIndex is set");
-            }
-            if (config.getPartitionIndex() < 1
-                    || config.getPartitionIndex() > config.getPartitionTotal()) {
-                throw new IllegalArgumentException(
-                        "partitionIndex must be between 1 and partitionTotal ("
-                                + config.getPartitionTotal() + "), got: "
-                                + config.getPartitionIndex());
-            }
+    private static void validatePartition(
+            final SentinelConfiguration config) {
+        final Integer total = config.getPartitionTotal();
+        if (total != null && total <= 0) {
+            throw new IllegalArgumentException(
+                    "partitionTotal must be a positive integer, got: "
+                            + total);
         }
+        final Integer index = config.getPartitionIndex();
+        if (index == null) {
+            return;
+        }
+        if (total == null) {
+            throw new IllegalArgumentException(
+                    "partitionTotal is required when partitionIndex is set");
+        }
+        if (index < 1 || index > total) {
+            throw new IllegalArgumentException(
+                    "partitionIndex must be between 1 and partitionTotal ("
+                            + total + "), got: " + index);
+        }
+    }
 
+    /**
+     * Requires threshold and thresholdAction to be set together.
+     *
+     * <p>Either one alone is a quality gate that silently does nothing:
+     * a threshold with no action is never acted on, and an action with no
+     * threshold has nothing to compare against.</p>
+     */
+    private static void validateThreshold(
+            final SentinelConfiguration config) {
         final Double threshold = config.getThreshold();
-        if (threshold != null) {
-            if (threshold < 0.0 || threshold > MAX_THRESHOLD) {
+        final ThresholdAction action = config.getThresholdAction();
+        if (threshold == null) {
+            if (action != null) {
                 throw new IllegalArgumentException(
-                        "threshold must be between 0.0 and 100.0, got: "
-                                + threshold);
+                        "threshold is required when thresholdAction is set");
             }
-            if (config.getThresholdAction() == null) {
-                throw new IllegalArgumentException(
-                        "thresholdAction is required when threshold is set");
-            }
+            return;
+        }
+        if (threshold < 0.0 || threshold > MAX_THRESHOLD) {
+            throw new IllegalArgumentException(
+                    "threshold must be between 0.0 and 100.0, got: "
+                            + threshold);
+        }
+        if (action == null) {
+            throw new IllegalArgumentException(
+                    "thresholdAction is required when threshold is set");
         }
     }
 

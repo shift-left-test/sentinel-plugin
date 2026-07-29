@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import io.jenkins.plugins.sentinel.config.SentinelConfiguration;
@@ -118,39 +119,163 @@ public final class SentinelEnvironment {
             final Map<String, String> env) {
         final SentinelConfiguration c = new SentinelConfiguration();
 
-        c.setBuildCommand(env.get(BUILD_COMMAND));
-        c.setTestCommand(env.get(TEST_COMMAND));
-        c.setTestResultDir(env.get(TEST_RESULT_DIR));
+        c.setBuildCommand(read(env, BUILD_COMMAND));
+        c.setTestCommand(read(env, TEST_COMMAND));
+        c.setTestResultDir(read(env, TEST_RESULT_DIR));
 
-        c.setSourceDir(env.get(SOURCE_DIR));
-        c.setCompileDbDir(env.get(COMPILE_DB_DIR));
-        c.setFrom(env.get(FROM));
-        c.setGenerator(env.get(GENERATOR));
-        c.setConfig(env.get(CONFIG));
-        c.setWorkspace(env.get(WORKSPACE));
-        c.setOutputDir(env.get(OUTPUT_DIR));
-        c.setSentinelPath(env.get(PATH));
+        c.setSourceDir(read(env, SOURCE_DIR));
+        c.setCompileDbDir(read(env, COMPILE_DB_DIR));
+        c.setFrom(read(env, FROM));
+        c.setGenerator(read(env, GENERATOR));
+        c.setConfig(read(env, CONFIG));
+        c.setWorkspace(read(env, WORKSPACE));
+        c.setOutputDir(read(env, OUTPUT_DIR));
+        c.setSentinelPath(read(env, PATH));
 
-        c.setTimeout(parseInteger(TIMEOUT, env.get(TIMEOUT)));
+        c.setTimeout(parseInteger(TIMEOUT, read(env, TIMEOUT)));
         c.setMutantsPerLine(
-                parseInteger(MUTANTS_PER_LINE, env.get(MUTANTS_PER_LINE)));
-        c.setLimit(parseInteger(LIMIT, env.get(LIMIT)));
+                parseInteger(MUTANTS_PER_LINE, read(env, MUTANTS_PER_LINE)));
+        c.setLimit(parseInteger(LIMIT, read(env, LIMIT)));
         c.setPartitionTotal(
-                parseInteger(PARTITION_TOTAL, env.get(PARTITION_TOTAL)));
+                parseInteger(PARTITION_TOTAL, read(env, PARTITION_TOTAL)));
 
-        c.setSeed(parseLong(SEED, env.get(SEED)));
+        c.setSeed(parseLong(SEED, read(env, SEED)));
 
-        c.setUncommitted(parseBoolean(env.get(UNCOMMITTED)));
-        c.setClean(parseBoolean(env.get(CLEAN)));
-        c.setDryRun(parseBoolean(env.get(DRY_RUN)));
-        c.setVerbose(parseBoolean(env.get(VERBOSE)));
+        c.setUncommitted(parseBoolean(read(env, UNCOMMITTED)));
+        c.setClean(parseBoolean(read(env, CLEAN)));
+        c.setDryRun(parseBoolean(read(env, DRY_RUN)));
+        c.setVerbose(parseBoolean(read(env, VERBOSE)));
 
-        c.setPatterns(parseList(env.get(PATTERNS)));
-        c.setExtensions(parseList(env.get(EXTENSIONS)));
-        c.setOperators(parseList(env.get(OPERATORS)));
-        c.setLcovTracefiles(parseList(env.get(LCOV_TRACEFILES)));
+        c.setPatterns(parseList(read(env, PATTERNS)));
+        c.setExtensions(parseList(read(env, EXTENSIONS)));
+        c.setOperators(parseList(read(env, OPERATORS)));
+        c.setLcovTracefiles(parseList(read(env, LCOV_TRACEFILES)));
 
         return c;
+    }
+
+    /**
+     * Applies a step parameter over the value already read from the
+     * environment, when the parameter was given.
+     *
+     * <p>This is the override half of the precedence rule that
+     * {@link #toConfiguration} starts: environment first, then any
+     * non-null step parameter wins. Both steps merge their parameters
+     * through this method so the rule is stated once rather than as one
+     * {@code if} per field.</p>
+     *
+     * @param value  step parameter value, null when not given
+     * @param setter target configuration setter
+     * @param <T>    the parameter type
+     */
+    public static <T> void override(final T value,
+                                    final Consumer<T> setter) {
+        if (value != null) {
+            setter.accept(value);
+        }
+    }
+
+    /**
+     * Returns whether a value counts as configured.
+     *
+     * <p>This is the single definition of "set" for the whole plugin: a
+     * variable that is absent, empty, or whitespace-only means the user
+     * did not choose a value, so the plugin's own default applies. Without
+     * one definition, {@code SENTINEL_WORKSPACE=''} reads as "set" in one
+     * place and "unset" in another, and the two disagree about which
+     * directory sentinel wrote to.</p>
+     *
+     * @param value the value to test, may be null
+     * @return true if the value is present and not blank
+     */
+    public static boolean isSet(final String value) {
+        return value != null && !value.isBlank();
+    }
+
+    /**
+     * Returns {@code value} when it is set, otherwise {@code fallback}.
+     *
+     * @param value    candidate value, may be null or blank
+     * @param fallback value to use when the candidate is not set
+     * @return the effective value
+     * @see #isSet(String)
+     */
+    public static String orDefault(final String value,
+                                   final String fallback) {
+        return isSet(value) ? value : fallback;
+    }
+
+    /**
+     * Returns the plugin-managed default for a directory, or {@code null}
+     * when the user chose the directory themselves.
+     *
+     * <p>The plugin recreates only the directories it assigned, so a
+     * {@code null} result means "leave this alone".</p>
+     *
+     * @param stepValue    step parameter value, may be null
+     * @param envValue     environment variable value, may be null or blank
+     * @param managedValue the directory the plugin would assign
+     * @return the managed directory, or null when either override is set
+     */
+    public static String managedDefault(final String stepValue,
+                                        final String envValue,
+                                        final String managedValue) {
+        if (stepValue != null || isSet(envValue)) {
+            return null;
+        }
+        return managedValue;
+    }
+
+    /**
+     * Reads a variable, treating a blank value as absent.
+     *
+     * @param env  environment variable map
+     * @param name variable name
+     * @return the value, or null when absent or blank
+     */
+    private static String read(final Map<String, String> env,
+                               final String name) {
+        final String value = env.get(name);
+        return isSet(value) ? value : null;
+    }
+
+    /**
+     * Returns the source directory to report against.
+     *
+     * @param config merged configuration
+     * @return the configured source directory, or {@value #DEFAULT_SOURCE_DIR}
+     */
+    public static String effectiveSourceDir(
+            final SentinelConfiguration config) {
+        return orDefault(config.getSourceDir(), DEFAULT_SOURCE_DIR);
+    }
+
+    /**
+     * Returns the directory reports are written to.
+     *
+     * @param config merged configuration
+     * @return the configured output directory, or
+     *         {@value #DEFAULT_OUTPUT_DIR}
+     */
+    public static String effectiveOutputDir(
+            final SentinelConfiguration config) {
+        return orDefault(config.getOutputDir(), DEFAULT_OUTPUT_DIR);
+    }
+
+    /**
+     * Returns the sentinel workspace for an unpartitioned run.
+     *
+     * <p>Both {@code sentinelRun}'s stash and {@code sentinelReport}'s
+     * unstash resolve the directory through this method, so they cannot
+     * disagree about where sentinel put its results.</p>
+     *
+     * @param config merged configuration
+     * @return the configured workspace, or
+     *         {@value #DEFAULT_SINGLE_WORKSPACE}
+     */
+    public static String effectiveSingleWorkspace(
+            final SentinelConfiguration config) {
+        return orDefault(config.getWorkspace(), DEFAULT_SINGLE_WORKSPACE);
     }
 
     /**
@@ -218,27 +343,52 @@ public final class SentinelEnvironment {
         return parseNumber(name, value, Long::parseLong);
     }
 
+    /**
+     * Parses a numeric variable. The value is trimmed first, so a variable
+     * padded by a pipeline {@code environment {}} block still parses.
+     *
+     * @param name   variable name, used in the error message
+     * @param value  non-blank value, or null when the variable is unset
+     * @param parser parse function for the target type
+     * @param <T>    numeric target type
+     * @return the parsed value, or null when unset
+     * @throws IllegalArgumentException if the value is not numeric
+     */
     private static <T> T parseNumber(final String name, final String value,
                                      final Function<String, T> parser) {
-        if (value == null || value.isEmpty()) {
+        if (value == null) {
             return null;
         }
         try {
-            return parser.apply(value);
-        } catch (NumberFormatException e) {
+            return parser.apply(value.trim());
+        } catch (final NumberFormatException e) {
             throw new IllegalArgumentException(
                     name + " must be an integer, got: '" + value + "'", e);
         }
     }
 
     private static boolean parseBoolean(final String value) {
-        return "true".equalsIgnoreCase(value);
+        return value != null && "true".equalsIgnoreCase(value.trim());
     }
 
+    /**
+     * Splits a comma-separated variable, dropping blank entries so a
+     * trailing comma does not produce an empty repeated CLI option.
+     *
+     * @param value non-blank value, or null when the variable is unset
+     * @return the entries, empty when unset
+     */
     private static List<String> parseList(final String value) {
-        if (value == null || value.isEmpty()) {
+        if (value == null) {
             return List.of();
         }
-        return List.of(value.split(","));
+        final List<String> entries = new ArrayList<>();
+        for (final String part : value.split(",")) {
+            final String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                entries.add(trimmed);
+            }
+        }
+        return List.copyOf(entries);
     }
 }

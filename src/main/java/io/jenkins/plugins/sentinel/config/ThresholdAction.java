@@ -29,7 +29,7 @@ public enum ThresholdAction {
         }
         try {
             return valueOf(value.toUpperCase(java.util.Locale.ROOT));
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             throw new IllegalArgumentException(
                     "Invalid ThresholdAction: '" + value
                             + "'. Valid values: FAILURE, UNSTABLE",
