@@ -383,7 +383,11 @@ public final class SentinelEnvironment {
             return List.of();
         }
         final List<String> entries = new ArrayList<>();
-        for (final String part : value.split(",")) {
+        // The -1 limit stops split from silently dropping trailing empty
+        // entries, so the blank filter below is the only thing deciding
+        // what counts as an entry. It also keeps Error Prone's
+        // StringSplitter check quiet, which flags the one-argument form.
+        for (final String part : value.split(",", -1)) {
             final String trimmed = part.trim();
             if (!trimmed.isEmpty()) {
                 entries.add(trimmed);

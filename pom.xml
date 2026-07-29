@@ -22,8 +22,10 @@
     <url>https://github.com/shift-left-test/sentinel-plugin</url>
 
     <properties>
+        <!-- No java.level: maven-hpi-plugin ignores it and warns that the
+             warning will become an error, and the parent POM already sets
+             maven.compiler.release to 17. -->
         <jenkins.version>2.479.3</jenkins.version>
-        <java.level>17</java.level>
     </properties>
 
     <dependencyManagement>
